@@ -57,7 +57,7 @@ func A(b ServiceBackend, zone string, state request.Request, previousRecords []d
 				continue
 			}
 			// Lookup
-			m1, e1 := b.Lookup(state, target, state.QType())
+			m1, e1 := b.Lookup(state, target, state.QType(), opt)
 			if e1 != nil {
 				continue
 			}
@@ -121,7 +121,7 @@ func AAAA(b ServiceBackend, zone string, state request.Request, previousRecords 
 				// We should already have found it
 				continue
 			}
-			m1, e1 := b.Lookup(state, target, state.QType())
+			m1, e1 := b.Lookup(state, target, state.QType(), opt)
 			if e1 != nil {
 				continue
 			}
@@ -186,12 +186,12 @@ func SRV(b ServiceBackend, zone string, state request.Request, opt Options) (rec
 			lookup[srv.Target] = true
 
 			if !dns.IsSubDomain(zone, srv.Target) {
-				m1, e1 := b.Lookup(state, srv.Target, dns.TypeA)
+				m1, e1 := b.Lookup(state, srv.Target, dns.TypeA, opt)
 				if e1 == nil {
 					extra = append(extra, m1.Answer...)
 				}
 
-				m1, e1 = b.Lookup(state, srv.Target, dns.TypeAAAA)
+				m1, e1 = b.Lookup(state, srv.Target, dns.TypeAAAA, opt)
 				if e1 == nil {
 					// If we have seen CNAME's we *assume* that they are already added.
 					for _, a := range m1.Answer {
@@ -246,12 +246,12 @@ func MX(b ServiceBackend, zone string, state request.Request, opt Options) (reco
 			lookup[mx.Mx] = true
 
 			if !dns.IsSubDomain(zone, mx.Mx) {
-				m1, e1 := b.Lookup(state, mx.Mx, dns.TypeA)
+				m1, e1 := b.Lookup(state, mx.Mx, dns.TypeA, opt)
 				if e1 == nil {
 					extra = append(extra, m1.Answer...)
 				}
 
-				m1, e1 = b.Lookup(state, mx.Mx, dns.TypeAAAA)
+				m1, e1 = b.Lookup(state, mx.Mx, dns.TypeAAAA, opt)
 				if e1 == nil {
 					// If we have seen CNAME's we *assume* that they are already added.
 					for _, a := range m1.Answer {
