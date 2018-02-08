@@ -8,6 +8,7 @@ import (
 
 	"github.com/coredns/coredns/plugin/pkg/edns"
 
+	"context"
 	"github.com/miekg/dns"
 )
 
@@ -18,6 +19,8 @@ type Request struct {
 
 	// Optional lowercased zone of this query.
 	Zone string
+
+	Context context.Context
 
 	// Cache size after first call to Size or Do.
 	size int

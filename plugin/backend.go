@@ -3,9 +3,9 @@ package plugin
 import (
 	"github.com/coredns/coredns/plugin/etcd/msg"
 	"github.com/coredns/coredns/request"
-	"golang.org/x/net/context"
 
 	"github.com/miekg/dns"
+
 	"golang.org/x/net/context"
 )
 
@@ -20,7 +20,7 @@ type ServiceBackend interface {
 	Reverse(state request.Request, exact bool, opt Options) ([]msg.Service, error)
 
 	// Lookup is used to find records else where.
-	Lookup(state request.Request, name string, typ uint16, opt Options) (*dns.Msg, error)
+	Lookup(state request.Request, name string, typ uint16) (*dns.Msg, error)
 
 	// Returns _all_ services that matches a certain name.
 	// Note: it does not implement a specific service.
@@ -47,5 +47,4 @@ type Transferer interface {
 
 // Options are extra options that can be specified for a lookup.
 type Options struct {
-	Context context.Context
 }

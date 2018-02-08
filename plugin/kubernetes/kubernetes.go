@@ -144,8 +144,8 @@ func (k *Kubernetes) Services(state request.Request, exact bool, opt plugin.Opti
 func (k *Kubernetes) primaryZone() string { return k.Zones[k.primaryZoneIndex] }
 
 // Lookup implements the ServiceBackend interface.
-func (k *Kubernetes) Lookup(state request.Request, name string, typ uint16, opt plugin.Options) (*dns.Msg, error) {
-	return k.Upstream.Lookup(state, name, typ, opt)
+func (k *Kubernetes) Lookup(state request.Request, name string, typ uint16) (*dns.Msg, error) {
+	return k.Upstream.Lookup(state, name, typ)
 }
 
 // IsNameError implements the ServiceBackend interface.

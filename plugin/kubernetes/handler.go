@@ -11,8 +11,8 @@ import (
 
 // ServeDNS implements the plugin.Handler interface.
 func (k Kubernetes) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
-	opt := plugin.Options{Context: ctx}
-	state := request.Request{W: w, Req: r}
+	opt := plugin.Options{}
+	state := request.Request{W: w, Req: r, Context: ctx}
 
 	m := new(dns.Msg)
 	m.SetReply(r)

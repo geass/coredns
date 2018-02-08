@@ -50,8 +50,8 @@ func (e *Etcd) Reverse(state request.Request, exact bool, opt plugin.Options) (s
 }
 
 // Lookup implements the ServiceBackend interface.
-func (e *Etcd) Lookup(state request.Request, name string, typ uint16, opt plugin.Options) (*dns.Msg, error) {
-	return e.Upstream.Lookup(state, name, typ, opt)
+func (e *Etcd) Lookup(state request.Request, name string, typ uint16) (*dns.Msg, error) {
+	return e.Upstream.Lookup(state, name, typ)
 }
 
 // IsNameError implements the ServiceBackend interface.
