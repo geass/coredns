@@ -48,16 +48,16 @@ func TestNewServer(t *testing.T) {
 	}
 }
 
-func TestDepthCheck(t *testing.T) {
+func TestIncrementDepthAndCheck(t *testing.T) {
 	ctx := context.Background()
 	var err error
 	for i := 0; i <= maxreentries; i++ {
-		ctx, err = depthCheck(ctx)
+		ctx, err = incrementDepthAndCheck(ctx)
 		if err != nil {
 			t.Errorf("Expected no error for depthCheck (i=%v), got %s", i, err)
 		}
 	}
-	_, err = depthCheck(ctx)
+	_, err = incrementDepthAndCheck(ctx)
 	if err == nil {
 		t.Errorf("Expected error for depthCheck (i=%v)", maxreentries+1)
 	}
