@@ -46,5 +46,4 @@ type Transferer interface {
 }
 
 // Options are extra options that can be specified for a lookup.
-type Options struct {
-}
+type Options struct{}

@@ -8,8 +8,8 @@ import (
 
 	"github.com/coredns/coredns/plugin/pkg/edns"
 
-	"context"
 	"github.com/miekg/dns"
+	"golang.org/x/net/context"
 )
 
 // Request contains some connection state and is useful in plugin.
