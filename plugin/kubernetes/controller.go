@@ -311,6 +311,7 @@ func (dns *dnsControl) Run() {
 	if dns.podController != nil {
 		go dns.podController.Run(dns.stopCh)
 	}
+	go dns.nsController.Run(dns.stopCh)
 	<-dns.stopCh
 }
 
@@ -322,7 +323,8 @@ func (dns *dnsControl) HasSynced() bool {
 	if dns.podController != nil {
 		c = dns.podController.HasSynced()
 	}
-	return a && b && c
+	d := dns.nsController.HasSynced()
+	return a && b && c && d
 }
 
 func (dns *dnsControl) ServiceList() (svcs []*api.Service) {
