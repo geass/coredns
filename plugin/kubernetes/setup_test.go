@@ -556,9 +556,9 @@ func TestKubernetesParseEndpointPodNames(t *testing.T) {
 
 func TestKubernetesParseNoEndpoints(t *testing.T) {
 	tests := []struct {
-		input                string // Corefile data as string
-		shouldErr            bool   // true if test case is exected to produce an error.
-		expectedErrContent   string // substring from the expected error. Empty for positive cases.
+		input                 string // Corefile data as string
+		shouldErr             bool   // true if test case is exected to produce an error.
+		expectedErrContent    string // substring from the expected error. Empty for positive cases.
 		expectedEndpointsInit bool
 	}{
 		// valid
@@ -615,4 +615,3 @@ func TestKubernetesParseNoEndpoints(t *testing.T) {
 		}
 	}
 }
-
