@@ -14,7 +14,11 @@ func (k *Kubernetes) Reverse(state request.Request, exact bool, opt plugin.Optio
 
 	ip := dnsutil.ExtractAddressFromReverse(state.Name())
 	if ip == "" {
-		return nil, errNoItems
+		if dnsutil.IsReverse(state.Name()) {
+			return nil, errNoItems
+		}
+		_, e := k.Records(state, exact)
+		return nil, e
 	}
 
 	records := k.serviceRecordForIP(ip, state.Name())

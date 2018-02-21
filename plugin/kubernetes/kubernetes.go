@@ -122,7 +122,7 @@ func (k *Kubernetes) Services(state request.Request, exact bool, opt plugin.Opti
 		return []msg.Service{svc}, nil
 	}
 
-	if dnsutil.IsReverse(state.Name()){
+	if dnsutil.IsReverse(state.Name()) {
 		// If the query is in a reverse zone, don't look up services
 		// instead return no answer, with error code of reverse lookup
 		_, err := k.Reverse(state, exact, opt)
