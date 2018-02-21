@@ -29,7 +29,7 @@ func ExtractAddressFromReverse(reverseName string) string {
 	return f(strings.Split(search, "."))
 }
 
-// IsReverse returns true of the name is in a reverse zone
+// IsReverse returns true if name is in a reverse zone
 func IsReverse(name string) bool {
 	return strings.HasSuffix(name, v4arpaSuffix) || strings.HasSuffix(name, v6arpaSuffix)
 }
