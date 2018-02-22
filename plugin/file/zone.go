@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	"github.com/coredns/coredns/plugin/file/tree"
-	"github.com/coredns/coredns/plugin/proxy"
+	"github.com/coredns/coredns/plugin/pkg/upstream"
 	"github.com/coredns/coredns/request"
 
 	"github.com/miekg/dns"
@@ -30,7 +30,7 @@ type Zone struct {
 	NoReload       bool
 	reloadMu       sync.RWMutex
 	ReloadShutdown chan bool
-	Proxy          proxy.Proxy // Proxy for looking up names during the resolution process
+	Upstream       upstream.Upstream // Upstream for looking up names during the resolution process
 }
 
 // Apex contains the apex records of a zone: SOA, NS and their potential signatures.
@@ -64,6 +64,16 @@ func (z *Zone) Copy() *Zone {
 	z1.Expired = z.Expired
 
 	z1.Apex = z.Apex
+	return z1
+}
+
+// CopyWithoutApex copies zone z without the Apex records.
+func (z *Zone) CopyWithoutApex() *Zone {
+	z1 := NewZone(z.origin, z.file)
+	z1.TransferTo = z.TransferTo
+	z1.TransferFrom = z.TransferFrom
+	z1.Expired = z.Expired
+
 	return z1
 }
 

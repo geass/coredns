@@ -1,7 +1,6 @@
 package template
 
 import (
-	"context"
 	"fmt"
 	"regexp"
 	"testing"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/mholt/caddy"
 	"github.com/miekg/dns"
+	"golang.org/x/net/context"
 )
 
 func TestHandler(t *testing.T) {
@@ -294,7 +294,7 @@ func TestHandler(t *testing.T) {
 	}
 }
 
-// TestMultiSection verfies that a corefile with mutliple but different template sections works
+// TestMultiSection verfies that a corefile with multiple but different template sections works
 func TestMultiSection(t *testing.T) {
 	ctx := context.TODO()
 
@@ -306,7 +306,7 @@ func TestMultiSection(t *testing.T) {
 		template IN A {
 			rcode REFUSED
 		}
-		# Fallthrough everyting IN TXT for test.
+		# Fallthrough everything IN TXT for test.
 		template IN TXT {
 			match "$^"
 			rcode SERVFAIL

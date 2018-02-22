@@ -4,7 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/coredns/coredns/plugin/pkg/dnsutil"
+	dnswatch "github.com/coredns/coredns/plugin/pkg/watch"
 
 	api "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -16,15 +20,15 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 )
 
-var (
-	namespace = api.NamespaceAll
-)
+var namespace = api.NamespaceAll
 
-const podIPIndex = "PodIP"
-const svcNameNamespaceIndex = "NameNamespace"
-const svcIPIndex = "ServiceIP"
-const epNameNamespaceIndex = "EndpointNameNamespace"
-const epIPIndex = "EndpointsIP"
+const (
+	podIPIndex            = "PodIP"
+	svcNameNamespaceIndex = "NameNamespace"
+	svcIPIndex            = "ServiceIP"
+	epNameNamespaceIndex  = "EndpointNameNamespace"
+	epIPIndex             = "EndpointsIP"
+)
 
 type dnsController interface {
 	ServiceList() []*api.Service
@@ -41,20 +45,30 @@ type dnsController interface {
 	Run()
 	HasSynced() bool
 	Stop() error
+
+	// Modified returns the timestamp of the most recent changes
+	Modified() int64
 }
 
 type dnsControl struct {
+	// Modified tracks timestamp of the most recent changes
+	// It needs to be first because it is guarnteed to be 8-byte
+	// aligned ( we use sync.LoadAtomic with this )
+	modified int64
+
 	client *kubernetes.Clientset
 
-	selector *labels.Selector
+	selector labels.Selector
 
 	svcController cache.Controller
 	podController cache.Controller
 	epController  cache.Controller
+	nsController  cache.Controller
 
 	svcLister cache.Indexer
 	podLister cache.Indexer
 	epLister  cache.Indexer
+	nsLister  storeToNamespaceLister
 
 	// stopLock is used to enforce only a single call to Stop is active.
 	// Needed because we allow stopping through an http endpoint and
@@ -62,23 +76,37 @@ type dnsControl struct {
 	stopLock sync.Mutex
 	shutdown bool
 	stopCh   chan struct{}
+
+	// watch-related items channel
+	watchChan *dnswatch.Chan
+	watched   map[string]bool
+	zones     []string
 }
 
 type dnsControlOpts struct {
-	initPodCache bool
-	resyncPeriod time.Duration
+	initPodCache       bool
+	initEndpointsCache bool
+	resyncPeriod       time.Duration
 	// Label handling.
 	labelSelector *meta.LabelSelector
-	selector      *labels.Selector
+	selector      labels.Selector
+	// watch-related items channel
+	watchChan *dnswatch.Chan
+	watched   map[string]bool
+	zones     []string
 }
 
 // newDNSController creates a controller for CoreDNS.
 func newdnsController(kubeClient *kubernetes.Clientset, opts dnsControlOpts) *dnsControl {
 	dns := dnsControl{
-		client:   kubeClient,
-		selector: opts.selector,
-		stopCh:   make(chan struct{}),
+		client:    kubeClient,
+		selector:  opts.selector,
+		stopCh:    make(chan struct{}),
+		watchChan: opts.watchChan,
+		watched:   opts.watched,
+		zones:     opts.zones,
 	}
+
 	dns.svcLister, dns.svcController = cache.NewIndexerInformer(
 		&cache.ListWatch{
 			ListFunc:  serviceListFunc(dns.client, namespace, dns.selector),
@@ -86,7 +114,7 @@ func newdnsController(kubeClient *kubernetes.Clientset, opts dnsControlOpts) *dn
 		},
 		&api.Service{},
 		opts.resyncPeriod,
-		cache.ResourceEventHandlerFuncs{},
+		cache.ResourceEventHandlerFuncs{AddFunc: dns.Add, UpdateFunc: dns.Update, DeleteFunc: dns.Delete},
 		cache.Indexers{svcNameNamespaceIndex: svcNameNamespaceIndexFunc, svcIPIndex: svcIPIndexFunc})
 
 	if opts.initPodCache {
@@ -95,22 +123,37 @@ func newdnsController(kubeClient *kubernetes.Clientset, opts dnsControlOpts) *dn
 				ListFunc:  podListFunc(dns.client, namespace, dns.selector),
 				WatchFunc: podWatchFunc(dns.client, namespace, dns.selector),
 			},
-			&api.Pod{}, // TODO replace with a lighter-weight custom struct
+			&api.Pod{},
 			opts.resyncPeriod,
-			cache.ResourceEventHandlerFuncs{},
+			cache.ResourceEventHandlerFuncs{AddFunc: dns.Add, UpdateFunc: dns.Update, DeleteFunc: dns.Delete},
 			cache.Indexers{podIPIndex: podIPIndexFunc})
 	}
-	dns.epLister, dns.epController = cache.NewIndexerInformer(
+
+	if opts.initEndpointsCache {
+		dns.epLister, dns.epController = cache.NewIndexerInformer(
+			&cache.ListWatch{
+				ListFunc:  endpointsListFunc(dns.client, namespace, dns.selector),
+				WatchFunc: endpointsWatchFunc(dns.client, namespace, dns.selector),
+			},
+			&api.Endpoints{},
+			opts.resyncPeriod,
+			cache.ResourceEventHandlerFuncs{AddFunc: dns.Add, UpdateFunc: dns.Update, DeleteFunc: dns.Delete},
+			cache.Indexers{epNameNamespaceIndex: epNameNamespaceIndexFunc, epIPIndex: epIPIndexFunc})
+	}
+
+	dns.nsLister.Store, dns.nsController = cache.NewInformer(
 		&cache.ListWatch{
-			ListFunc:  endpointsListFunc(dns.client, namespace, dns.selector),
-			WatchFunc: endpointsWatchFunc(dns.client, namespace, dns.selector),
+			ListFunc:  namespaceListFunc(dns.client, dns.selector),
+			WatchFunc: namespaceWatchFunc(dns.client, dns.selector),
 		},
-		&api.Endpoints{},
-		opts.resyncPeriod,
-		cache.ResourceEventHandlerFuncs{},
-		cache.Indexers{epNameNamespaceIndex: epNameNamespaceIndexFunc, epIPIndex: epIPIndexFunc})
+		&api.Namespace{}, opts.resyncPeriod, cache.ResourceEventHandlerFuncs{})
 
 	return &dns
+}
+
+// storeToNamespaceLister makes a Store that lists Namespaces.
+type storeToNamespaceLister struct {
+	cache.Store
 }
 
 func podIPIndexFunc(obj interface{}) ([]string, error) {
@@ -159,10 +202,10 @@ func epIPIndexFunc(obj interface{}) ([]string, error) {
 	return idx, nil
 }
 
-func serviceListFunc(c *kubernetes.Clientset, ns string, s *labels.Selector) func(meta.ListOptions) (runtime.Object, error) {
+func serviceListFunc(c *kubernetes.Clientset, ns string, s labels.Selector) func(meta.ListOptions) (runtime.Object, error) {
 	return func(opts meta.ListOptions) (runtime.Object, error) {
 		if s != nil {
-			opts.LabelSelector = (*s).String()
+			opts.LabelSelector = s.String()
 		}
 		listV1, err := c.CoreV1().Services(ns).List(opts)
 		if err != nil {
@@ -172,10 +215,10 @@ func serviceListFunc(c *kubernetes.Clientset, ns string, s *labels.Selector) fun
 	}
 }
 
-func podListFunc(c *kubernetes.Clientset, ns string, s *labels.Selector) func(meta.ListOptions) (runtime.Object, error) {
+func podListFunc(c *kubernetes.Clientset, ns string, s labels.Selector) func(meta.ListOptions) (runtime.Object, error) {
 	return func(opts meta.ListOptions) (runtime.Object, error) {
 		if s != nil {
-			opts.LabelSelector = (*s).String()
+			opts.LabelSelector = s.String()
 		}
 		listV1, err := c.CoreV1().Pods(ns).List(opts)
 		if err != nil {
@@ -185,10 +228,10 @@ func podListFunc(c *kubernetes.Clientset, ns string, s *labels.Selector) func(me
 	}
 }
 
-func serviceWatchFunc(c *kubernetes.Clientset, ns string, s *labels.Selector) func(options meta.ListOptions) (watch.Interface, error) {
+func serviceWatchFunc(c *kubernetes.Clientset, ns string, s labels.Selector) func(options meta.ListOptions) (watch.Interface, error) {
 	return func(options meta.ListOptions) (watch.Interface, error) {
 		if s != nil {
-			options.LabelSelector = (*s).String()
+			options.LabelSelector = s.String()
 		}
 		w, err := c.CoreV1().Services(ns).Watch(options)
 		if err != nil {
@@ -198,10 +241,10 @@ func serviceWatchFunc(c *kubernetes.Clientset, ns string, s *labels.Selector) fu
 	}
 }
 
-func podWatchFunc(c *kubernetes.Clientset, ns string, s *labels.Selector) func(options meta.ListOptions) (watch.Interface, error) {
+func podWatchFunc(c *kubernetes.Clientset, ns string, s labels.Selector) func(options meta.ListOptions) (watch.Interface, error) {
 	return func(options meta.ListOptions) (watch.Interface, error) {
 		if s != nil {
-			options.LabelSelector = (*s).String()
+			options.LabelSelector = s.String()
 		}
 		w, err := c.CoreV1().Pods(ns).Watch(options)
 		if err != nil {
@@ -211,10 +254,10 @@ func podWatchFunc(c *kubernetes.Clientset, ns string, s *labels.Selector) func(o
 	}
 }
 
-func endpointsListFunc(c *kubernetes.Clientset, ns string, s *labels.Selector) func(meta.ListOptions) (runtime.Object, error) {
+func endpointsListFunc(c *kubernetes.Clientset, ns string, s labels.Selector) func(meta.ListOptions) (runtime.Object, error) {
 	return func(opts meta.ListOptions) (runtime.Object, error) {
 		if s != nil {
-			opts.LabelSelector = (*s).String()
+			opts.LabelSelector = s.String()
 		}
 		listV1, err := c.CoreV1().Endpoints(ns).List(opts)
 		if err != nil {
@@ -224,12 +267,38 @@ func endpointsListFunc(c *kubernetes.Clientset, ns string, s *labels.Selector) f
 	}
 }
 
-func endpointsWatchFunc(c *kubernetes.Clientset, ns string, s *labels.Selector) func(options meta.ListOptions) (watch.Interface, error) {
+func endpointsWatchFunc(c *kubernetes.Clientset, ns string, s labels.Selector) func(options meta.ListOptions) (watch.Interface, error) {
 	return func(options meta.ListOptions) (watch.Interface, error) {
 		if s != nil {
-			options.LabelSelector = (*s).String()
+			options.LabelSelector = s.String()
 		}
 		w, err := c.CoreV1().Endpoints(ns).Watch(options)
+		if err != nil {
+			return nil, err
+		}
+		return w, nil
+	}
+}
+
+func namespaceListFunc(c *kubernetes.Clientset, s labels.Selector) func(meta.ListOptions) (runtime.Object, error) {
+	return func(opts meta.ListOptions) (runtime.Object, error) {
+		if s != nil {
+			opts.LabelSelector = s.String()
+		}
+		listV1, err := c.CoreV1().Namespaces().List(opts)
+		if err != nil {
+			return nil, err
+		}
+		return listV1, err
+	}
+}
+
+func namespaceWatchFunc(c *kubernetes.Clientset, s labels.Selector) func(options meta.ListOptions) (watch.Interface, error) {
+	return func(options meta.ListOptions) (watch.Interface, error) {
+		if s != nil {
+			options.LabelSelector = s.String()
+		}
+		w, err := c.CoreV1().Namespaces().Watch(options)
 		if err != nil {
 			return nil, err
 		}
@@ -256,22 +325,29 @@ func (dns *dnsControl) Stop() error {
 // Run starts the controller.
 func (dns *dnsControl) Run() {
 	go dns.svcController.Run(dns.stopCh)
-	go dns.epController.Run(dns.stopCh)
+	if dns.epController != nil {
+		go dns.epController.Run(dns.stopCh)
+	}
 	if dns.podController != nil {
 		go dns.podController.Run(dns.stopCh)
 	}
+	go dns.nsController.Run(dns.stopCh)
 	<-dns.stopCh
 }
 
 // HasSynced calls on all controllers.
 func (dns *dnsControl) HasSynced() bool {
 	a := dns.svcController.HasSynced()
-	b := dns.epController.HasSynced()
+	b := true
+	if dns.epController != nil {
+		b = dns.epController.HasSynced()
+	}
 	c := true
 	if dns.podController != nil {
 		c = dns.podController.HasSynced()
 	}
-	return a && b && c
+	d := dns.nsController.HasSynced()
+	return a && b && c && d
 }
 
 func (dns *dnsControl) ServiceList() (svcs []*api.Service) {
@@ -378,6 +454,9 @@ func (dns *dnsControl) EpIndexReverse(ip string) (ep []*api.Endpoints) {
 }
 
 func (dns *dnsControl) EndpointsList() (eps []*api.Endpoints) {
+	if dns.epLister == nil {
+		return nil
+	}
 	os := dns.epLister.List()
 	for _, o := range os {
 		ep, ok := o.(*api.Endpoints)
@@ -401,12 +480,130 @@ func (dns *dnsControl) GetNodeByName(name string) (*api.Node, error) {
 }
 
 // GetNamespaceByName returns the namespace by name. If nothing is found an
-// error is returned. This query causes a roundtrip to the k8s API server, so
-// use sparingly.
+// error is returned.
 func (dns *dnsControl) GetNamespaceByName(name string) (*api.Namespace, error) {
-	v1ns, err := dns.client.CoreV1().Namespaces().Get(name, meta.GetOptions{})
-	if err != nil {
-		return &api.Namespace{}, err
+	os := dns.nsLister.List()
+	for _, o := range os {
+		ns, ok := o.(*api.Namespace)
+		if !ok {
+			continue
+		}
+		if name == ns.ObjectMeta.Name {
+			return ns, nil
+		}
 	}
-	return v1ns, nil
+	return nil, fmt.Errorf("namespace not found")
+}
+
+func (dns *dnsControl) Modified() int64 {
+	unix := atomic.LoadInt64(&dns.modified)
+	return unix
+}
+
+// updateModified set dns.modified to the current time.
+func (dns *dnsControl) updateModifed() {
+	unix := time.Now().Unix()
+	atomic.StoreInt64(&dns.modified, unix)
+}
+
+func (dns *dnsControl) sendServiceUpdates(s *api.Service) {
+	z := []string{}
+	for i := range dns.zones {
+		//TODO: Need a common way to form names, we do this in XFR and here and in normal lookups...
+		name := dnsutil.Join(append([]string{}, s.ObjectMeta.Name, s.ObjectMeta.Namespace, `svc`, dns.zones[i]))
+		if _, ok := dns.watched[name]; ok {
+			z = append(z, name)
+		}
+	}
+	if len(z) > 0 {
+		*dns.watchChan <- z
+	}
+}
+
+func (dns *dnsControl) sendEndpointsUpdates(ep *api.Endpoints) {
+	//TODO: implement this
+}
+
+// sendUpdates sends a notification to the server if a watch
+// is enabled for the qname
+func (dns *dnsControl) sendUpdates(obj interface{}) {
+	switch o := obj.(type) {
+	case *api.Service:
+		dns.sendServiceUpdates(o)
+	case *api.Endpoints:
+		dns.sendEndpointsUpdates(o)
+	default:
+		fmt.Printf("Updates for %T not supported.", o)
+	}
+}
+
+func (dns *dnsControl) Add(obj interface{}) {
+	dns.updateModifed()
+	dns.sendUpdates(obj)
+}
+func (dns *dnsControl) Delete(obj interface{}) {
+	dns.updateModifed()
+	dns.sendUpdates(obj)
+}
+
+func (dns *dnsControl) Update(objOld, newObj interface{}) {
+	// endpoint updates can come frequently, make sure
+	// it's a change we care about
+	if o, ok := objOld.(*api.Endpoints); ok {
+		n := newObj.(*api.Endpoints)
+		if endpointsEquivalent(o, n) {
+			return
+		}
+	}
+	dns.updateModifed()
+
+	// names don't change, so just send new
+	dns.sendUpdates(newObj)
+}
+
+// endpointsEquivalent checks if the update to an endpoint is something
+// that matters to us: ready addresses, host names, ports (including names for SRV)
+func endpointsEquivalent(a, b *api.Endpoints) bool {
+	// supposedly we should be able to rely on
+	// these being sorted and able to be compared
+	// they are supposed to be in a canonical format
+
+	if len(a.Subsets) != len(b.Subsets) {
+		return false
+	}
+
+	for i, sa := range a.Subsets {
+		// check the Addresses and Ports. Ignore unready addresses.
+		sb := b.Subsets[i]
+		if len(sa.Addresses) != len(sb.Addresses) {
+			return false
+		}
+		if len(sa.Ports) != len(sb.Ports) {
+			return false
+		}
+
+		for addr, aaddr := range sa.Addresses {
+			baddr := sb.Addresses[addr]
+			if aaddr.IP != baddr.IP {
+				return false
+			}
+			if aaddr.Hostname != baddr.Hostname {
+				return false
+			}
+		}
+
+		for port, aport := range sa.Ports {
+			bport := sb.Ports[port]
+			if aport.Name != bport.Name {
+				return false
+			}
+			if aport.Port != bport.Port {
+				return false
+			}
+			if aport.Protocol != bport.Protocol {
+				return false
+			}
+		}
+	}
+	return true
 }
