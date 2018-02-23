@@ -122,14 +122,6 @@ func (k *Kubernetes) Services(state request.Request, exact bool, opt plugin.Opti
 		return []msg.Service{svc}, nil
 	}
 
-	if dnsutil.IsReverse(state.Name()) {
-		// If the query is in a reverse zone, don't look up services
-		// instead return no answer, with error code of reverse lookup
-		_, err := k.Reverse(state, exact, opt)
-		return svcs, err
-
-	}
-
 	s, e := k.Records(state, false)
 
 	// SRV for external services is not yet implemented, so remove those records.
@@ -280,6 +272,10 @@ func (k *Kubernetes) Records(state request.Request, exact bool) ([]msg.Service, 
 	r, e := parseRequest(state)
 	if e != nil {
 		return nil, e
+	}
+
+	if dnsutil.IsReverse(state.Name()) {
+		return nil, errNoItems
 	}
 
 	if !wildcard(r.namespace) && !k.namespaceExposed(r.namespace) {
