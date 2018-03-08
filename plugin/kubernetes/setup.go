@@ -117,8 +117,8 @@ func ParseStanza(c *caddy.Controller) (*Kubernetes, error) {
 		initEndpointsCache: true,
 		ignoreEmptyService: false,
 		resyncPeriod:       defaultResyncPeriod,
-		watched:      k8s.watched,
-		endpointNameMode: false,
+		watched:            k8s.watched,
+		endpointNameMode:   false,
 	}
 	k8s.opts = opts
 
