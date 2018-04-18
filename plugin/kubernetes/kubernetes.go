@@ -273,7 +273,7 @@ func (k *Kubernetes) Records(state request.Request, exact bool) ([]msg.Service, 
 	if e != nil {
 		return nil, e
 	}
-	if r.podOrSvc == ""{
+	if r.podOrSvc == "" {
 		return nil, nil
 	}
 
