@@ -22,4 +22,45 @@ func TestParse(t *testing.T) {
 	if err != nil {
 		t.Errorf("Expected success but found %s for `rewrite name a.com b.com`", err)
 	}
+
+	c = caddy.NewTestController("dns",
+		`rewrite stop {
+    name regex foo bar
+    answer name bar foo
+}`)
+	_, err = rewriteParse(c)
+	if err != nil {
+		t.Errorf("Expected success but found %s for valid response rewrite", err)
+	}
+
+	c = caddy.NewTestController("dns", `rewrite stop name regex foo bar answer name bar foo`)
+	_, err = rewriteParse(c)
+	if err != nil {
+		t.Errorf("Expected success but found %s for valid response rewrite", err)
+	}
+
+	c = caddy.NewTestController("dns",
+		`rewrite stop {
+    name regex foo bar
+    answer name bar foo
+    name baz qux
+}`)
+	_, err = rewriteParse(c)
+	if err == nil {
+		t.Errorf("Expected error but got success for invalid response rewrite")
+	} else if err.Error() != "response rewrites must consist only of a name rule with 3 arguments and an answer rule with 3 arguments" {
+		t.Errorf("Got wrong error for invalid response rewrite: %v", err.Error())
+	}
+
+	c = caddy.NewTestController("dns",
+		`rewrite stop {
+    answer name bar foo
+    name regex foo bar
+}`)
+	_, err = rewriteParse(c)
+	if err == nil {
+		t.Errorf("Expected error but got success for invalid response rewrite")
+	} else if err.Error() != "response rewrites must begin with a name rule" {
+		t.Errorf("Got wrong error for invalid response rewrite: %v", err.Error())
+	}
 }
