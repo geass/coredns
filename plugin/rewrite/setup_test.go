@@ -1,6 +1,7 @@
 package rewrite
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/mholt/caddy"
@@ -48,7 +49,7 @@ func TestParse(t *testing.T) {
 	_, err = rewriteParse(c)
 	if err == nil {
 		t.Errorf("Expected error but got success for invalid response rewrite")
-	} else if err.Error() != "response rewrites must consist only of a name rule with 3 arguments and an answer rule with 3 arguments" {
+	} else if !strings.Contains(err.Error(), "must consist only of") {
 		t.Errorf("Got wrong error for invalid response rewrite: %v", err.Error())
 	}
 
@@ -60,7 +61,7 @@ func TestParse(t *testing.T) {
 	_, err = rewriteParse(c)
 	if err == nil {
 		t.Errorf("Expected error but got success for invalid response rewrite")
-	} else if err.Error() != "response rewrites must begin with a name rule" {
+	} else if !strings.Contains(err.Error(), "must begin with a name rule") {
 		t.Errorf("Got wrong error for invalid response rewrite: %v", err.Error())
 	}
 }
