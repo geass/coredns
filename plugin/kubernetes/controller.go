@@ -617,7 +617,7 @@ func (dns *dnsControl) sendUpdates(oldObj, newObj interface{}) {
 		dns.updateModifed()
 		dns.sendPodUpdates(ob)
 	default:
-		fmt.Printf("[WARNING] Updates for %T not supported.", ob)
+		log.Warningf("Updates for %T not supported.", ob)
 	}
 }
 
