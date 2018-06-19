@@ -26,6 +26,7 @@ var Directives = []string{
 	"chaos",
 	"loadbalance",
 	"cache",
+	"cnameresolver",
 	"rewrite",
 	"dnssec",
 	"autopath",

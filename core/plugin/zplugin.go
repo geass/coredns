@@ -9,6 +9,7 @@ import (
 	_ "github.com/coredns/coredns/plugin/bind"
 	_ "github.com/coredns/coredns/plugin/cache"
 	_ "github.com/coredns/coredns/plugin/chaos"
+	_ "github.com/coredns/coredns/plugin/cnameresolver"
 	_ "github.com/coredns/coredns/plugin/debug"
 	_ "github.com/coredns/coredns/plugin/deprecated"
 	_ "github.com/coredns/coredns/plugin/dnssec"
