@@ -1,7 +1,8 @@
-package cnameresolver
+package resolve
 
 import (
 	"context"
+	"reflect"
 
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/pkg/nonwriter"
@@ -16,13 +17,13 @@ type CNAMEResolve struct {
 	Zones []string
 }
 
+// Name implements the Handler interface.
+func (c CNAMEResolve) Name() string { return name() }
+func name() string                  { return "resolve" }
+
 // ServeDNS implements the plugin.Handle interface.
 func (c CNAMEResolve) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
 	state := request.Request{W: w, Req: r, Context: ctx}
-
-	if state.QType() != dns.TypeA && state.QType() != dns.TypeAAAA {
-		return plugin.NextOrFailure(c.Name(), c.Next, ctx, w, r)
-	}
 
 	zone := plugin.Zones(c.Zones).Matches(state.Name())
 	if zone == "" {
@@ -44,40 +45,14 @@ func (c CNAMEResolve) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns
 		}
 
 		// Lookup CNAME targets by querying against the plugin chain, using another non-writer
-		lookup := nonwriter.New(nw)
+		target := nonwriter.New(nw)
 		r2 := r.Copy()
 		r2.SetQuestion(a.(*dns.CNAME).Target, state.QType())
-		rcode2, err := plugin.NextOrFailure(c.Name(), c.Next, ctx, lookup, r2)
-		if err != nil || lookup.Msg == nil || !plugin.ClientWrite(rcode2) {
+		rcode2, err := plugin.NextOrFailure(c.Name(), c.Next, ctx, target, r2)
+		if err != nil || target.Msg == nil || !plugin.ClientWrite(rcode2) {
 			continue
 		}
-
-		// Make sure targets are not already in the client response (dont create duplicates)
-		unique := true
-		for _, t := range lookup.Msg.Answer {
-			for _, b := range nw.Msg.Answer {
-				if t.Header().Name != b.Header().Name {
-					continue
-				}
-				if t.Header().Rrtype != b.Header().Rrtype {
-					continue
-				}
-				if t.Header().Rrtype == dns.TypeCNAME && t.(*dns.CNAME).Target != b.(*dns.CNAME).Target {
-					continue
-				}
-				if t.Header().Rrtype == dns.TypeA && !t.(*dns.A).A.Equal(b.(*dns.A).A) {
-					continue
-				}
-				if t.Header().Rrtype == dns.TypeAAAA && !t.(*dns.AAAA).AAAA.Equal(b.(*dns.AAAA).AAAA) {
-					continue
-				}
-				unique = false
-				break
-			}
-			if unique {
-				nw.Msg.Answer = append(nw.Msg.Answer, t)
-			}
-		}
+		addTarget(nw, target)
 	}
 
 	// Write the response to the client
@@ -85,5 +60,64 @@ func (c CNAMEResolve) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns
 	return rcode, err
 }
 
-// Name implements the Handler interface.
-func (c CNAMEResolve) Name() string { return "cnameresolver" }
+// addTarget adds the answers from 'target' to the answers in 'clientResponse' ensuring that targets are not already in the
+// client response (not creating duplicates)
+func addTarget(clientResponse *nonwriter.Writer, target *nonwriter.Writer) {
+	for _, t := range target.Msg.Answer {
+		unique := true
+		for _, b := range clientResponse.Msg.Answer {
+			if rrDiff(t, b) {
+				continue
+			}
+			unique = false
+			break
+		}
+		if unique {
+			clientResponse.Msg.Answer = append(clientResponse.Msg.Answer, t)
+		}
+	}
+	for _, t := range target.Msg.Extra {
+		unique := true
+		for _, b := range clientResponse.Msg.Extra {
+			if rrDiff(t, b) {
+				continue
+			}
+			unique = false
+			break
+		}
+		if unique {
+			clientResponse.Msg.Extra = append(clientResponse.Msg.Extra, t)
+		}
+	}
+
+}
+
+// rrDiff returns true if the two dns.RR are different in name, type, or target
+func rrDiff(a, b dns.RR) bool {
+	if a.Header().Name != b.Header().Name {
+		return true
+	}
+	if a.Header().Rrtype != b.Header().Rrtype {
+		return true
+	}
+	if a.Header().Rrtype == dns.TypeA && !a.(*dns.A).A.Equal(b.(*dns.A).A) {
+		return true
+	}
+	if a.Header().Rrtype == dns.TypeAAAA && !a.(*dns.AAAA).AAAA.Equal(b.(*dns.AAAA).AAAA) {
+		return true
+	}
+	if a.Header().Rrtype == dns.TypeCNAME && a.(*dns.CNAME).Target != b.(*dns.CNAME).Target {
+		return true
+	}
+	if a.Header().Rrtype == dns.TypeSRV && a.(*dns.SRV).Target != b.(*dns.SRV).Target {
+		return true
+	}
+	if a.Header().Rrtype == dns.TypeMX && a.(*dns.MX).Mx != b.(*dns.MX).Mx {
+		return true
+	}
+	if a.Header().Rrtype == dns.TypeTXT && !reflect.DeepEqual(a.(*dns.TXT).Txt, b.(*dns.TXT).Txt) {
+		return true
+	}
+	// ... there's gotta be a better way to do this...
+	return false
+}

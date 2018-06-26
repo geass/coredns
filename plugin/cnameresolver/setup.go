@@ -1,4 +1,4 @@
-package cnameresolver
+package resolve
 
 import (
 	"github.com/coredns/coredns/core/dnsserver"
@@ -8,16 +8,16 @@ import (
 )
 
 func init() {
-	caddy.RegisterPlugin("cnameresolver", caddy.Plugin{
+	caddy.RegisterPlugin(name(), caddy.Plugin{
 		ServerType: "dns",
 		Action:     setup,
 	})
 }
 
 func setup(c *caddy.Controller) error {
-	cnr, err := cnameResolverParse(c)
+	cnr, err := resolveParse(c)
 	if err != nil {
-		return plugin.Error("cnameresolver", err)
+		return plugin.Error(name(), err)
 	}
 
 	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
@@ -28,7 +28,7 @@ func setup(c *caddy.Controller) error {
 	return nil
 }
 
-func cnameResolverParse(c *caddy.Controller) (CNAMEResolve, error) {
+func resolveParse(c *caddy.Controller) (CNAMEResolve, error) {
 	cnr := CNAMEResolve{}
 
 	i := 0
