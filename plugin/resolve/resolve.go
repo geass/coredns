@@ -19,7 +19,7 @@ type Resolve struct {
 
 // Name implements the Handler interface.
 func (c Resolve) Name() string { return name() }
-func name() string                  { return "resolve" }
+func name() string             { return "resolve" }
 
 // ServeDNS implements the plugin.Handle interface.
 func (c Resolve) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
@@ -27,6 +27,10 @@ func (c Resolve) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 
 	zone := plugin.Zones(c.Zones).Matches(state.Name())
 	if zone == "" {
+		return plugin.NextOrFailure(c.Name(), c.Next, ctx, w, r)
+	}
+
+	if state.QType() == dns.TypeCNAME {
 		return plugin.NextOrFailure(c.Name(), c.Next, ctx, w, r)
 	}
 
@@ -53,18 +57,28 @@ func (c Resolve) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 			nw.Msg.Answer = addTarget(nw.Msg.Answer, target.Msg.Answer)
 		}
 		if a.Header().Rrtype == dns.TypeSRV {
-			// Lookup SRV targets by querying against the plugin chain, using another non-writer
+			// Lookup A records for SRV targets by querying against the plugin chain, using another non-writer
 			target := nonwriter.New(nw)
 			r2 := r.Copy()
-			r2.SetQuestion(a.(*dns.SRV).Target, state.QType())
+			r2.SetQuestion(a.(*dns.SRV).Target, dns.TypeA)
 			rcode2, err := plugin.NextOrFailure(c.Name(), c.Next, ctx, target, r2)
 			if err != nil || target.Msg == nil || !plugin.ClientWrite(rcode2) {
 				continue
 			}
 			// Add answer to the extra/additional section
 			nw.Msg.Extra = addTarget(nw.Msg.Extra, target.Msg.Answer)
-		}
 
+			// Lookup AAAA records for SRV targets by querying against the plugin chain, using another non-writer
+			target = nonwriter.New(nw)
+			r2 = r.Copy()
+			r2.SetQuestion(a.(*dns.SRV).Target, dns.TypeAAAA)
+			rcode2, err = plugin.NextOrFailure(c.Name(), c.Next, ctx, target, r2)
+			if err != nil || target.Msg == nil || !plugin.ClientWrite(rcode2) {
+				continue
+			}
+			// Add answer to the extra/additional section
+			nw.Msg.Extra = addTarget(nw.Msg.Extra, target.Msg.Answer)
+		}
 	}
 
 	// Write the response to the client
@@ -90,7 +104,6 @@ func addTarget(clientRR, targetRR []dns.RR) []dns.RR {
 	}
 	return clientRR
 }
-
 
 // rrDiff returns true if the two dns.RR are different in name, type, or target
 func rrDiff(a, b dns.RR) bool {

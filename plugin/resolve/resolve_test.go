@@ -13,7 +13,7 @@ func TestName(t *testing.T) {
 		c := Resolve{}
 		want := "resolve"
 		if got := c.Name(); got != want {
-			t.Errorf("resolve.Name() = %v; want %v", got, want)
+			t.Errorf("Resolve.Name() = %v; want %v", got, want)
 		}
 	})
 }
@@ -36,13 +36,13 @@ func TestAddTarget(t *testing.T) {
 			},
 			testFunc: func(rr []dns.RR) error {
 				if len(rr) != 2 {
-					return fmt.Errorf("expected 2 answers; got %v", len(rr))
+					return fmt.Errorf("Expected 2 answers; got %v", len(rr))
 				}
 				if rr[0].Header().Rrtype != dns.TypeCNAME {
-					t.Errorf("expected 1st answer to be type %v; got %v", dns.TypeCNAME, rr[0].Header().Rrtype)
+					t.Errorf("Expected 1st answer to be type %v; got %v", dns.TypeCNAME, rr[0].Header().Rrtype)
 				}
 				if rr[1].Header().Rrtype != dns.TypeA {
-					t.Errorf("expected 2nd answer to be type %v; got %v", dns.TypeA, rr[0].Header().Rrtype)
+					t.Errorf("Expected 2nd answer to be type %v; got %v", dns.TypeA, rr[0].Header().Rrtype)
 				}
 				return nil
 			},
@@ -58,13 +58,13 @@ func TestAddTarget(t *testing.T) {
 			},
 			testFunc: func(rr []dns.RR) error {
 				if len(rr) != 2 {
-					return fmt.Errorf("expected 2 answers; got %v", len(rr))
+					return fmt.Errorf("Expected 2 answers; got %v", len(rr))
 				}
 				if rr[0].Header().Rrtype != dns.TypeCNAME {
-					t.Errorf("expected 1st answer to be type %v; got %v", dns.TypeCNAME, rr[0].Header().Rrtype)
+					t.Errorf("Expected 1st answer to be type %v; got %v", dns.TypeCNAME, rr[0].Header().Rrtype)
 				}
 				if rr[1].Header().Rrtype != dns.TypeA {
-					t.Errorf("expected 2nd answer to be type %v; got %v", dns.TypeA, rr[0].Header().Rrtype)
+					t.Errorf("Expected 2nd answer to be type %v; got %v", dns.TypeA, rr[0].Header().Rrtype)
 				}
 				return nil
 			},
