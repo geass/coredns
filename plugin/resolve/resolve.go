@@ -11,10 +11,12 @@ import (
 	"github.com/miekg/dns"
 )
 
-// CNAMEResolve performs CNAME target resolution on all CNAMEs in the response
+// Resolve performs CNAME target resolution on all CNAMEs in the response
 type Resolve struct {
-	Next  plugin.Handler
-	Zones []string
+	Next    plugin.Handler
+	Zones   []string
+	DoCNAME bool
+	DoSRV   bool
 }
 
 // Name implements the Handler interface.
@@ -44,7 +46,7 @@ func (c Resolve) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 	// Look at each answer and do lookups for any CNAME answers
 	for i := 0; i < len(nw.Msg.Answer); i++ {
 		a := nw.Msg.Answer[i]
-		if a.Header().Rrtype == dns.TypeCNAME {
+		if c.DoCNAME && a.Header().Rrtype == dns.TypeCNAME {
 			// Lookup CNAME targets by querying against the plugin chain, using another non-writer
 			target := nonwriter.New(nw)
 			r2 := r.Copy()
@@ -56,7 +58,7 @@ func (c Resolve) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 			// Add answer to the answer section
 			nw.Msg.Answer = addTarget(nw.Msg.Answer, target.Msg.Answer)
 		}
-		if a.Header().Rrtype == dns.TypeSRV {
+		if c.DoSRV && a.Header().Rrtype == dns.TypeSRV {
 			// Lookup A records for SRV targets by querying against the plugin chain, using another non-writer
 			target := nonwriter.New(nw)
 			r2 := r.Copy()

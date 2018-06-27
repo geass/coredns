@@ -3,7 +3,6 @@ package resolve
 import (
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
-
 	"github.com/mholt/caddy"
 )
 
@@ -29,7 +28,10 @@ func setup(c *caddy.Controller) error {
 }
 
 func resolveParse(c *caddy.Controller) (Resolve, error) {
-	cnr := Resolve{}
+	cnr := Resolve{
+		DoCNAME: true,
+		DoSRV:   true,
+	}
 
 	i := 0
 	for c.Next() {
@@ -46,7 +48,44 @@ func resolveParse(c *caddy.Controller) (Resolve, error) {
 		for i, str := range cnr.Zones {
 			cnr.Zones[i] = plugin.Host(str).Normalize()
 		}
+		if c.NextBlock() {
+			for {
+				switch c.Val() {
+				case "no":
+					args := c.RemainingArgs()
+					if len(args) != 1 {
+						return cnr, c.ArgErr()
+					}
+					if args[0] == "cname" {
+						cnr.DoCNAME = false
+					}
+					if args[0] == "srv" {
+						cnr.DoSRV = false
+					}
+				case "cname":
+					args := c.RemainingArgs()
+					if len(args) != 0 {
+						return cnr, c.ArgErr()
+					}
+					cnr.DoCNAME = true
+				case "srv":
+					args := c.RemainingArgs()
+					if len(args) != 0 {
+						return cnr, c.ArgErr()
+					}
+					cnr.DoSRV = true
+				default:
+					if c.Val() != "}" {
+						return cnr, c.Errf("unknown property '%s'", c.Val())
+					}
+				}
 
+				if !c.Next() {
+					break
+				}
+			}
+		}
 	}
+
 	return cnr, nil
 }
