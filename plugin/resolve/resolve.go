@@ -2,6 +2,7 @@ package resolve
 
 import (
 	"context"
+	"errors"
 	"reflect"
 
 	"github.com/coredns/coredns/plugin"
@@ -86,6 +87,18 @@ func (c Resolve) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 	// Write the response to the client
 	w.WriteMsg(nw.Msg)
 	return rcode, err
+}
+
+func (c Resolve) queryTarget (state request.Request, qName string, qType uint16) ([]dns.RR, error){
+	// Lookup AAAA records for SRV targets by querying against the plugin chain, using another non-writer
+	target := nonwriter.New(state.W)
+	r := state.Req.Copy()
+	r.SetQuestion(qName, qType)
+	rcode, err := plugin.NextOrFailure(c.Name(), c.Next, state.Context, target, r)
+	if err != nil || target.Msg == nil || !plugin.ClientWrite(rcode) {
+		return nil, errors.New("")
+	}
+	return target.Msg.Answer, nil
 }
 
 // addTarget adds the answers from 'target' to the answers in 'clientResponse' ensuring that targets are not already in the
