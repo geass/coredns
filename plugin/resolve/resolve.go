@@ -12,17 +12,17 @@ import (
 )
 
 // CNAMEResolve performs CNAME target resolution on all CNAMEs in the response
-type CNAMEResolve struct {
+type Resolve struct {
 	Next  plugin.Handler
 	Zones []string
 }
 
 // Name implements the Handler interface.
-func (c CNAMEResolve) Name() string { return name() }
+func (c Resolve) Name() string { return name() }
 func name() string                  { return "resolve" }
 
 // ServeDNS implements the plugin.Handle interface.
-func (c CNAMEResolve) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
+func (c Resolve) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
 	state := request.Request{W: w, Req: r, Context: ctx}
 
 	zone := plugin.Zones(c.Zones).Matches(state.Name())
@@ -40,19 +40,31 @@ func (c CNAMEResolve) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns
 	// Look at each answer and do lookups for any CNAME answers
 	for i := 0; i < len(nw.Msg.Answer); i++ {
 		a := nw.Msg.Answer[i]
-		if a.Header().Rrtype != dns.TypeCNAME {
-			continue
+		if a.Header().Rrtype == dns.TypeCNAME {
+			// Lookup CNAME targets by querying against the plugin chain, using another non-writer
+			target := nonwriter.New(nw)
+			r2 := r.Copy()
+			r2.SetQuestion(a.(*dns.CNAME).Target, state.QType())
+			rcode2, err := plugin.NextOrFailure(c.Name(), c.Next, ctx, target, r2)
+			if err != nil || target.Msg == nil || !plugin.ClientWrite(rcode2) {
+				continue
+			}
+			// Add answer to the answer section
+			nw.Msg.Answer = addTarget(nw.Msg.Answer, target.Msg.Answer)
+		}
+		if a.Header().Rrtype == dns.TypeSRV {
+			// Lookup SRV targets by querying against the plugin chain, using another non-writer
+			target := nonwriter.New(nw)
+			r2 := r.Copy()
+			r2.SetQuestion(a.(*dns.SRV).Target, state.QType())
+			rcode2, err := plugin.NextOrFailure(c.Name(), c.Next, ctx, target, r2)
+			if err != nil || target.Msg == nil || !plugin.ClientWrite(rcode2) {
+				continue
+			}
+			// Add answer to the extra/additional section
+			nw.Msg.Extra = addTarget(nw.Msg.Extra, target.Msg.Answer)
 		}
 
-		// Lookup CNAME targets by querying against the plugin chain, using another non-writer
-		target := nonwriter.New(nw)
-		r2 := r.Copy()
-		r2.SetQuestion(a.(*dns.CNAME).Target, state.QType())
-		rcode2, err := plugin.NextOrFailure(c.Name(), c.Next, ctx, target, r2)
-		if err != nil || target.Msg == nil || !plugin.ClientWrite(rcode2) {
-			continue
-		}
-		addTarget(nw, target)
 	}
 
 	// Write the response to the client
@@ -62,10 +74,10 @@ func (c CNAMEResolve) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns
 
 // addTarget adds the answers from 'target' to the answers in 'clientResponse' ensuring that targets are not already in the
 // client response (not creating duplicates)
-func addTarget(clientResponse *nonwriter.Writer, target *nonwriter.Writer) {
-	for _, t := range target.Msg.Answer {
+func addTarget(clientRR, targetRR []dns.RR) []dns.RR {
+	for _, t := range targetRR {
 		unique := true
-		for _, b := range clientResponse.Msg.Answer {
+		for _, b := range clientRR {
 			if rrDiff(t, b) {
 				continue
 			}
@@ -73,24 +85,12 @@ func addTarget(clientResponse *nonwriter.Writer, target *nonwriter.Writer) {
 			break
 		}
 		if unique {
-			clientResponse.Msg.Answer = append(clientResponse.Msg.Answer, t)
+			clientRR = append(clientRR, t)
 		}
 	}
-	for _, t := range target.Msg.Extra {
-		unique := true
-		for _, b := range clientResponse.Msg.Extra {
-			if rrDiff(t, b) {
-				continue
-			}
-			unique = false
-			break
-		}
-		if unique {
-			clientResponse.Msg.Extra = append(clientResponse.Msg.Extra, t)
-		}
-	}
-
+	return clientRR
 }
+
 
 // rrDiff returns true if the two dns.RR are different in name, type, or target
 func rrDiff(a, b dns.RR) bool {

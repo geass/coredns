@@ -28,8 +28,8 @@ func setup(c *caddy.Controller) error {
 	return nil
 }
 
-func resolveParse(c *caddy.Controller) (CNAMEResolve, error) {
-	cnr := CNAMEResolve{}
+func resolveParse(c *caddy.Controller) (Resolve, error) {
+	cnr := Resolve{}
 
 	i := 0
 	for c.Next() {
