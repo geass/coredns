@@ -123,7 +123,7 @@ func TestResolveACNAMELoop(t *testing.T) {
 
 	// Test that an A query returns a CNAME and an A record
 	m := new(dns.Msg)
-	m.SetQuestion("test.", dns.TypeA)
+	m.SetQuestion("cname.test.", dns.TypeA)
 
 	r, err := dns.Exchange(m, udp)
 	if err != nil {
