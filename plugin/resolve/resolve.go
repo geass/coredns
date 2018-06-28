@@ -2,7 +2,6 @@ package resolve
 
 import (
 	"context"
-	"errors"
 	"strings"
 
 	"github.com/coredns/coredns/plugin"
@@ -44,43 +43,19 @@ func (c Resolve) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 		return rcode, err
 	}
 
-	// Look at each answer and do lookups for any CNAME answers
+	// Look at each answer and do lookups for any CNAME/SRV answers
 	for i := 0; i < len(nw.Msg.Answer); i++ {
 		a := nw.Msg.Answer[i]
 		if c.DoCNAME && a.Header().Rrtype == dns.TypeCNAME {
-			// Lookup CNAME targets by querying against the plugin chain, using another non-writer
-			target := nonwriter.New(nw)
-			r2 := r.Copy()
-			r2.SetQuestion(a.(*dns.CNAME).Target, state.QType())
-			rcode2, err := plugin.NextOrFailure(c.Name(), c.Next, ctx, target, r2)
-			if err != nil || target.Msg == nil || !plugin.ClientWrite(rcode2) {
-				continue
-			}
-			// Add answer to the answer section
-			nw.Msg.Answer = addTarget(nw.Msg.Answer, target.Msg.Answer)
+			targetAnswer := c.queryTarget(state, a.(*dns.CNAME).Target, state.QType())
+			nw.Msg.Answer = addTarget(nw.Msg.Answer, targetAnswer)
 		}
 		if c.DoSRV && a.Header().Rrtype == dns.TypeSRV {
-			// Lookup A records for SRV targets by querying against the plugin chain, using another non-writer
-			target := nonwriter.New(nw)
-			r2 := r.Copy()
-			r2.SetQuestion(a.(*dns.SRV).Target, dns.TypeA)
-			rcode2, err := plugin.NextOrFailure(c.Name(), c.Next, ctx, target, r2)
-			if err != nil || target.Msg == nil || !plugin.ClientWrite(rcode2) {
-				continue
-			}
-			// Add answer to the extra/additional section
-			nw.Msg.Extra = addTarget(nw.Msg.Extra, target.Msg.Answer)
+			targetAnswerA := c.queryTarget(state, a.(*dns.SRV).Target, dns.TypeA)
+			nw.Msg.Extra = addTarget(nw.Msg.Extra, targetAnswerA)
 
-			// Lookup AAAA records for SRV targets by querying against the plugin chain, using another non-writer
-			target = nonwriter.New(nw)
-			r2 = r.Copy()
-			r2.SetQuestion(a.(*dns.SRV).Target, dns.TypeAAAA)
-			rcode2, err = plugin.NextOrFailure(c.Name(), c.Next, ctx, target, r2)
-			if err != nil || target.Msg == nil || !plugin.ClientWrite(rcode2) {
-				continue
-			}
-			// Add answer to the extra/additional section
-			nw.Msg.Extra = addTarget(nw.Msg.Extra, target.Msg.Answer)
+			targetAnswerAAAA := c.queryTarget(state, a.(*dns.SRV).Target, dns.TypeAAAA)
+			nw.Msg.Extra = addTarget(nw.Msg.Extra, targetAnswerAAAA)
 		}
 	}
 
@@ -89,16 +64,16 @@ func (c Resolve) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 	return rcode, err
 }
 
-func (c Resolve) queryTarget (state request.Request, qName string, qType uint16) ([]dns.RR, error){
-	// Lookup AAAA records for SRV targets by querying against the plugin chain, using another non-writer
+// queryTarget looks up records for the qname by querying against the plugin chain, using a non-writer
+func (c Resolve) queryTarget(state request.Request, qName string, qType uint16) []dns.RR {
 	target := nonwriter.New(state.W)
 	r := state.Req.Copy()
 	r.SetQuestion(qName, qType)
 	rcode, err := plugin.NextOrFailure(c.Name(), c.Next, state.Context, target, r)
 	if err != nil || target.Msg == nil || !plugin.ClientWrite(rcode) {
-		return nil, errors.New("")
+		return nil
 	}
-	return target.Msg.Answer, nil
+	return target.Msg.Answer
 }
 
 // addTarget adds the answers from 'target' to the answers in 'clientResponse' ensuring that targets are not already in the
@@ -141,7 +116,7 @@ func rrDiff(a, b dns.RR) bool {
 		return true
 	}
 	// All other record types
-	if strings.TrimPrefix(a.String(), a.Header().String()) != strings.TrimPrefix(b.String(), b.Header().String()){
+	if strings.TrimPrefix(a.String(), a.Header().String()) != strings.TrimPrefix(b.String(), b.Header().String()) {
 		return true
 	}
 	return false

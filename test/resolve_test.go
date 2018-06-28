@@ -199,7 +199,7 @@ func TestResolveSRV(t *testing.T) {
 		t.Fatalf("Expected SRV target to be ep.test. got %s", x)
 	}
 	if len(r.Extra) != 2 {
-		t.Fatalf("Expected 1 extra recrod, got %v", len(r.Answer))
+		t.Fatalf("Expected 1 extra record, got %v", len(r.Answer))
 	}
 	if x := r.Extra[0].(*dns.A).A.String(); x != "1.2.3.4" {
 		t.Fatalf("Incorrect extra record for SRV, expected 1.2.3.4 got %s", x)
