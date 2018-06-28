@@ -118,9 +118,9 @@ func TestAddTarget(t *testing.T) {
 			args: args{
 				clientRR: []dns.RR{
 					&dns.CNAME{Hdr: dns.RR_Header{Name: "cname", Rrtype: dns.TypeCNAME}, Target: "target."},
-					&dns.TXT{Hdr: dns.RR_Header{Name: "target", Rrtype: dns.TypeSRV}, Txt: "srv."},
+					&dns.TXT{Hdr: dns.RR_Header{Name: "target", Rrtype: dns.TypeTXT}, Txt: []string{"txt"}},
 				},
-				targetRR: []dns.RR{&dns.SRV{Hdr: dns.RR_Header{Name: "target", Rrtype: dns.TypeSRV}, Target: "srv."}},
+				targetRR: []dns.RR{&dns.TXT{Hdr: dns.RR_Header{Name: "target", Rrtype: dns.TypeTXT}, Txt: []string{"txt"}}},
 			},
 			testFunc: func(rr []dns.RR) error {
 				if len(rr) != 2 {
@@ -129,8 +129,8 @@ func TestAddTarget(t *testing.T) {
 				if rr[0].Header().Rrtype != dns.TypeCNAME {
 					t.Errorf("Expected 1st answer to be type %v; got %v", dns.TypeCNAME, rr[0].Header().Rrtype)
 				}
-				if rr[1].Header().Rrtype != dns.TypeSRV {
-					t.Errorf("Expected 2nd answer to be type %v; got %v", dns.TypeSRV, rr[0].Header().Rrtype)
+				if rr[1].Header().Rrtype != dns.TypeTXT {
+					t.Errorf("Expected 2nd answer to be type %v; got %v", dns.TypeTXT, rr[0].Header().Rrtype)
 				}
 				return nil
 			},
