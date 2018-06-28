@@ -31,7 +31,7 @@ func TestAddTarget(t *testing.T) {
 		{
 			name: "basic test",
 			args: args{
-				clientRR: []dns.RR{&dns.CNAME{Hdr: dns.RR_Header{Name: "cname", Rrtype: dns.TypeCNAME}, Target: "target"}},
+				clientRR: []dns.RR{&dns.CNAME{Hdr: dns.RR_Header{Name: "cname", Rrtype: dns.TypeCNAME}, Target: "target."}},
 				targetRR: []dns.RR{&dns.A{Hdr: dns.RR_Header{Name: "target", Rrtype: dns.TypeA}, A: net.ParseIP("1.2.3.4")}},
 			},
 			testFunc: func(rr []dns.RR) error {
@@ -48,10 +48,10 @@ func TestAddTarget(t *testing.T) {
 			},
 		},
 		{
-			name: "do not add duplicate",
+			name: "do not add duplicate A",
 			args: args{
 				clientRR: []dns.RR{
-					&dns.CNAME{Hdr: dns.RR_Header{Name: "cname", Rrtype: dns.TypeCNAME}, Target: "target"},
+					&dns.CNAME{Hdr: dns.RR_Header{Name: "cname", Rrtype: dns.TypeCNAME}, Target: "target."},
 					&dns.A{Hdr: dns.RR_Header{Name: "target", Rrtype: dns.TypeA}, A: net.ParseIP("1.2.3.4")},
 				},
 				targetRR: []dns.RR{&dns.A{Hdr: dns.RR_Header{Name: "target", Rrtype: dns.TypeA}, A: net.ParseIP("1.2.3.4")}},
@@ -65,6 +65,72 @@ func TestAddTarget(t *testing.T) {
 				}
 				if rr[1].Header().Rrtype != dns.TypeA {
 					t.Errorf("Expected 2nd answer to be type %v; got %v", dns.TypeA, rr[0].Header().Rrtype)
+				}
+				return nil
+			},
+		},
+		{
+			name: "do not add duplicate AAAA",
+			args: args{
+				clientRR: []dns.RR{
+					&dns.CNAME{Hdr: dns.RR_Header{Name: "cname", Rrtype: dns.TypeCNAME}, Target: "target."},
+					&dns.AAAA{Hdr: dns.RR_Header{Name: "target", Rrtype: dns.TypeAAAA}, AAAA: net.ParseIP("::1:2:3:4")},
+				},
+				targetRR: []dns.RR{&dns.AAAA{Hdr: dns.RR_Header{Name: "target", Rrtype: dns.TypeAAAA}, AAAA: net.ParseIP("::1:2:3:4")}},
+			},
+			testFunc: func(rr []dns.RR) error {
+				if len(rr) != 2 {
+					return fmt.Errorf("Expected 2 answers; got %v", len(rr))
+				}
+				if rr[0].Header().Rrtype != dns.TypeCNAME {
+					t.Errorf("Expected 1st answer to be type %v; got %v", dns.TypeCNAME, rr[0].Header().Rrtype)
+				}
+				if rr[1].Header().Rrtype != dns.TypeAAAA {
+					t.Errorf("Expected 2nd answer to be type %v; got %v", dns.TypeAAAA, rr[0].Header().Rrtype)
+				}
+				return nil
+			},
+		},
+		{
+			name: "do not add duplicate SRV",
+			args: args{
+				clientRR: []dns.RR{
+					&dns.CNAME{Hdr: dns.RR_Header{Name: "cname", Rrtype: dns.TypeCNAME}, Target: "target."},
+					&dns.SRV{Hdr: dns.RR_Header{Name: "target", Rrtype: dns.TypeSRV}, Target: "srv."},
+				},
+				targetRR: []dns.RR{&dns.SRV{Hdr: dns.RR_Header{Name: "target", Rrtype: dns.TypeSRV}, Target: "srv."}},
+			},
+			testFunc: func(rr []dns.RR) error {
+				if len(rr) != 2 {
+					return fmt.Errorf("Expected 2 answers; got %v", len(rr))
+				}
+				if rr[0].Header().Rrtype != dns.TypeCNAME {
+					t.Errorf("Expected 1st answer to be type %v; got %v", dns.TypeCNAME, rr[0].Header().Rrtype)
+				}
+				if rr[1].Header().Rrtype != dns.TypeSRV {
+					t.Errorf("Expected 2nd answer to be type %v; got %v", dns.TypeSRV, rr[0].Header().Rrtype)
+				}
+				return nil
+			},
+		},
+		{
+			name: "do not add duplicate other types",
+			args: args{
+				clientRR: []dns.RR{
+					&dns.CNAME{Hdr: dns.RR_Header{Name: "cname", Rrtype: dns.TypeCNAME}, Target: "target."},
+					&dns.TXT{Hdr: dns.RR_Header{Name: "target", Rrtype: dns.TypeSRV}, Txt: "srv."},
+				},
+				targetRR: []dns.RR{&dns.SRV{Hdr: dns.RR_Header{Name: "target", Rrtype: dns.TypeSRV}, Target: "srv."}},
+			},
+			testFunc: func(rr []dns.RR) error {
+				if len(rr) != 2 {
+					return fmt.Errorf("Expected 2 answers; got %v", len(rr))
+				}
+				if rr[0].Header().Rrtype != dns.TypeCNAME {
+					t.Errorf("Expected 1st answer to be type %v; got %v", dns.TypeCNAME, rr[0].Header().Rrtype)
+				}
+				if rr[1].Header().Rrtype != dns.TypeSRV {
+					t.Errorf("Expected 2nd answer to be type %v; got %v", dns.TypeSRV, rr[0].Header().Rrtype)
 				}
 				return nil
 			},

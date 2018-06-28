@@ -3,7 +3,7 @@ package resolve
 import (
 	"context"
 	"errors"
-	"reflect"
+	"strings"
 
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/pkg/nonwriter"
@@ -140,12 +140,9 @@ func rrDiff(a, b dns.RR) bool {
 	if a.Header().Rrtype == dns.TypeSRV && a.(*dns.SRV).Target != b.(*dns.SRV).Target {
 		return true
 	}
-	if a.Header().Rrtype == dns.TypeMX && a.(*dns.MX).Mx != b.(*dns.MX).Mx {
+	// All other record types
+	if strings.TrimPrefix(a.String(), a.Header().String()) != strings.TrimPrefix(b.String(), b.Header().String()){
 		return true
 	}
-	if a.Header().Rrtype == dns.TypeTXT && !reflect.DeepEqual(a.(*dns.TXT).Txt, b.(*dns.TXT).Txt) {
-		return true
-	}
-	// ... there's gotta be a better way to do this...
 	return false
 }
