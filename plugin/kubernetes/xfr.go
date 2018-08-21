@@ -78,7 +78,7 @@ func (k *Kubernetes) transfer(c chan dns.RR, zone string) {
 	zonePath := msg.Path(zone, "coredns")
 	serviceList := k.APIConn.ServiceList()
 	for _, svc := range serviceList {
-		if !k.namespaceExposed(svc.Namespace){
+		if !k.namespaceExposed(svc.Namespace) {
 			continue
 		}
 		svcBase := []string{zonePath, Svc, svc.Namespace, svc.Name}
