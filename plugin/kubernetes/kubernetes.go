@@ -466,8 +466,8 @@ func (k *Kubernetes) findServices(r recordRequest, zone string) (services []msg.
 						}
 
 						if len(eps.Ports) == 0 {
-							// add an empty sentinel port entry so we create records for services without any declared ports
-							eps.Ports = append(eps.Ports, api.EndpointPort{})
+							// add a sentinel port (-1) entry so we create records for services without any declared ports
+							eps.Ports = append(eps.Ports, api.EndpointPort{Port: -1})
 						}
 
 						for _, p := range eps.Ports {
@@ -501,8 +501,8 @@ func (k *Kubernetes) findServices(r recordRequest, zone string) (services []msg.
 
 		// ClusterIP service
 		if len(svc.Spec.Ports) == 0 {
-			// add an empty sentinel port entry so we create records for services without any declared ports
-			svc.Spec.Ports = append(svc.Spec.Ports, api.ServicePort{})
+			// add a sentinel port (-1) entry so we create records for services without any declared ports
+			svc.Spec.Ports = append(svc.Spec.Ports, api.ServicePort{Port: -1})
 		}
 		for _, p := range svc.Spec.Ports {
 			if !(match(r.port, p.Name) && match(r.protocol, string(p.Protocol))) {

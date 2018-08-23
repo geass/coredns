@@ -172,9 +172,9 @@ func SRV(b ServiceBackend, zone string, state request.Request, opt Options) (rec
 		w[serv.Priority] += weight
 	}
 	for _, serv := range services {
-		// Don't add the entry if the port is 0 (invalid). The kubernetes plugin uses port 0 when a service/endpoint
+		// Don't add the entry if the port is -1 (invalid). The kubernetes plugin uses port -1 when a service/endpoint
 		// does not have any declared ports.
-		if serv.Port == 0 {
+		if serv.Port == -1 {
 			continue
 		}
 		w1 := 100.0 / float64(w[serv.Priority])
