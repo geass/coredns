@@ -20,11 +20,9 @@ import (
 )
 
 const (
-	podIPIndex            = "PodIP"
-	svcNameNamespaceIndex = "NameNamespace"
-	svcIPIndex            = "ServiceIP"
-	epNameNamespaceIndex  = "EndpointNameNamespace"
-	epIPIndex             = "EndpointsIP"
+	podIPIndex = "PodIP"
+	svcIPIndex = "ServiceIP"
+	epIPIndex  = "EndpointsIP"
 )
 
 type dnsController interface {
@@ -118,6 +116,10 @@ func newdnsController(kubeClient *kubernetes.Clientset, opts dnsControlOpts) *dn
 		revIdxAllEndpoints: opts.revIdxAllEndpoints,
 	}
 
+	if !dns.revIdxAllEndpoints {
+		dns.headlessEndpoints = make(map[string]endpoints)
+	}
+
 	dns.svcLister, dns.svcController = cache.NewIndexerInformer(
 		&cache.ListWatch{
 			ListFunc:  serviceListFunc(dns.client, api.NamespaceAll, dns.selector),
@@ -126,7 +128,7 @@ func newdnsController(kubeClient *kubernetes.Clientset, opts dnsControlOpts) *dn
 		&api.Service{},
 		opts.resyncPeriod,
 		cache.ResourceEventHandlerFuncs{AddFunc: dns.Add, UpdateFunc: dns.Update, DeleteFunc: dns.Delete},
-		cache.Indexers{svcNameNamespaceIndex: svcNameNamespaceIndexFunc, svcIPIndex: svcIPIndexFunc})
+		cache.Indexers{svcIPIndex: svcIPIndexFunc})
 
 	if opts.initPodCache {
 		dns.podLister, dns.podController = cache.NewIndexerInformer(
@@ -141,7 +143,7 @@ func newdnsController(kubeClient *kubernetes.Clientset, opts dnsControlOpts) *dn
 	}
 
 	if opts.initEndpointsCache {
-		indexers := map[string]cache.IndexFunc{epNameNamespaceIndex: epNameNamespaceIndexFunc}
+		indexers := map[string]cache.IndexFunc{}
 		if opts.revIdxAllEndpoints {
 			indexers[epIPIndex] = epIPIndexFunc
 		}
@@ -180,22 +182,6 @@ func svcIPIndexFunc(obj interface{}) ([]string, error) {
 		return nil, errObj
 	}
 	return []string{svc.Spec.ClusterIP}, nil
-}
-
-func svcNameNamespaceIndexFunc(obj interface{}) ([]string, error) {
-	s, ok := obj.(*api.Service)
-	if !ok {
-		return nil, errObj
-	}
-	return []string{s.ObjectMeta.Name + "." + s.ObjectMeta.Namespace}, nil
-}
-
-func epNameNamespaceIndexFunc(obj interface{}) ([]string, error) {
-	s, ok := obj.(*api.Endpoints)
-	if !ok {
-		return nil, errObj
-	}
-	return []string{s.ObjectMeta.Name + "." + s.ObjectMeta.Namespace}, nil
 }
 
 func epIPIndexFunc(obj interface{}) ([]string, error) {
@@ -359,6 +345,10 @@ func (dns *dnsControl) ServiceList() (svcs []*api.Service) {
 	return svcs
 }
 
+func metaNamespaceKey(namespace, name string) string {
+	return namespace + "/" + name
+}
+
 func (dns *dnsControl) PodIndex(ip string) (pods []*api.Pod) {
 	if dns.podLister == nil {
 		return nil
@@ -377,21 +367,21 @@ func (dns *dnsControl) PodIndex(ip string) (pods []*api.Pod) {
 	return pods
 }
 
-func (dns *dnsControl) SvcIndex(idx string) (svcs []*api.Service) {
+func (dns *dnsControl) SvcIndex(key string) (svcs []*api.Service) {
 	if dns.svcLister == nil {
 		return nil
 	}
-	os, err := dns.svcLister.ByIndex(svcNameNamespaceIndex, idx)
+	o, _, err := dns.svcLister.GetByKey(key)
 	if err != nil {
 		return nil
 	}
-	for _, o := range os {
-		s, ok := o.(*api.Service)
-		if !ok {
-			continue
-		}
-		svcs = append(svcs, s)
+	s, ok := o.(*api.Service)
+
+	if !ok {
+		return
 	}
+	svcs = append(svcs, s)
+
 	return svcs
 }
 
@@ -414,21 +404,19 @@ func (dns *dnsControl) SvcIndexReverse(ip string) (svcs []*api.Service) {
 	return svcs
 }
 
-func (dns *dnsControl) EpIndex(idx string) (ep []*api.Endpoints) {
+func (dns *dnsControl) EpIndex(key string) (ep []*api.Endpoints) {
 	if dns.epLister == nil {
 		return nil
 	}
-	os, err := dns.epLister.ByIndex(epNameNamespaceIndex, idx)
+	o, _, err := dns.epLister.GetByKey(key)
 	if err != nil {
 		return nil
 	}
-	for _, o := range os {
-		e, ok := o.(*api.Endpoints)
-		if !ok {
-			continue
-		}
-		ep = append(ep, e)
+	e, ok := o.(*api.Endpoints)
+	if !ok {
+		return
 	}
+	ep = append(ep, e)
 	return ep
 }
 
@@ -436,7 +424,7 @@ func (dns *dnsControl) EpIndexReverse(ip string) (ep []*api.Endpoints) {
 	if !dns.revIdxAllEndpoints {
 		for namespace, names := range dns.headlessEndpoints[ip] {
 			for name := range names {
-				ep = append(ep, dns.EpIndex(name+"."+namespace)...)
+				ep = append(ep, dns.EpIndex(metaNamespaceKey(namespace, name))...)
 			}
 		}
 		return ep
@@ -630,14 +618,15 @@ func (dns *dnsControl) AddEndpoints(obj interface{}) {
 	if !ok {
 		return
 	}
-	svcs, err := dns.svcLister.ByIndex(svcNameNamespaceIndex, ep.Name+"."+ep.Namespace)
+	o, exists, err := dns.svcLister.GetByKey(metaNamespaceKey(ep.GetNamespace(), ep.GetName()))
+
 	if err != nil {
 		return
 	}
-	if len(svcs) != 1 {
+	if !exists {
 		return
 	}
-	svc, ok := svcs[0].(*api.Service)
+	svc, ok := o.(*api.Service)
 	if !ok {
 		return
 	}
@@ -646,7 +635,13 @@ func (dns *dnsControl) AddEndpoints(obj interface{}) {
 	}
 	for _, s := range ep.Subsets {
 		for _, a := range s.Addresses {
-			dns.headlessEndpoints[a.IP][ep.Namespace][ep.Name] = true
+			if dns.headlessEndpoints[a.IP] == nil {
+				dns.headlessEndpoints[a.IP] = make(endpoints)
+			}
+			if dns.headlessEndpoints[a.IP][ep.Namespace] == nil {
+				dns.headlessEndpoints[a.IP][ep.Namespace] = make(map[string]bool)
+			}
+			dns.addEpToMap(a.IP, ep)
 		}
 	}
 }
@@ -659,14 +654,14 @@ func (dns *dnsControl) DeleteEndpoints(obj interface{}) {
 	if !ok {
 		return
 	}
-	svcs, err := dns.svcLister.ByIndex(svcNameNamespaceIndex, ep.Name+"."+ep.Namespace)
+	o, exists, err := dns.svcLister.GetByKey(metaNamespaceKey(ep.GetNamespace(), ep.GetName()))
 	if err != nil {
 		return
 	}
-	if len(svcs) != 1 {
+	if !exists {
 		return
 	}
-	svc, ok := svcs[0].(*api.Service)
+	svc, ok := o.(*api.Service)
 	if !ok {
 		return
 	}
@@ -687,14 +682,14 @@ func (dns *dnsControl) UpdateEndpoints(oldObj, newObj interface{}) {
 	if !(ok && fine) {
 		return
 	}
-	svcs, err := dns.svcLister.ByIndex(svcNameNamespaceIndex, oldEp.Name+"."+oldEp.Namespace)
+	o, exists, err := dns.svcLister.GetByKey(metaNamespaceKey(oldEp.GetNamespace(), oldEp.GetName()))
 	if err != nil {
 		return
 	}
-	if len(svcs) != 1 {
+	if !exists {
 		return
 	}
-	svc, ok := svcs[0].(*api.Service)
+	svc, ok := o.(*api.Service)
 	if !ok {
 		return
 	}
@@ -734,11 +729,22 @@ func (dns *dnsControl) UpdateEndpoints(oldObj, newObj interface{}) {
 			}
 			if !found {
 				// add item to map
-				dns.headlessEndpoints[na.IP][newEp.Namespace][newEp.Name] = true
+				dns.addEpToMap(na.IP, newEp)
 			}
-
 		}
 	}
+}
+
+func (dns *dnsControl) addEpToMap(ip string, ep *api.Endpoints){
+	namespace := ep.GetNamespace()
+	name := ep.GetName()
+	if dns.headlessEndpoints[ip] == nil {
+		dns.headlessEndpoints[ip] = make(endpoints)
+	}
+	if dns.headlessEndpoints[ip][namespace] == nil {
+		dns.headlessEndpoints[ip][namespace] = make(map[string]bool)
+	}
+	dns.headlessEndpoints[ip][namespace][name] = true
 }
 
 // subsetsEquivalent checks if two endpoint subsets are significantly equivalent

@@ -114,7 +114,7 @@ func (k *Kubernetes) transfer(c chan dns.RR, zone string) {
 				continue
 			}
 
-			endpointsList := k.APIConn.EpIndex(svc.Name + "." + svc.Namespace)
+			endpointsList := k.APIConn.EpIndex(metaNamespaceKey(svc.Namespace, svc.Name))
 
 			for _, ep := range endpointsList {
 				if ep.ObjectMeta.Name != svc.Name || ep.ObjectMeta.Namespace != svc.Namespace {
