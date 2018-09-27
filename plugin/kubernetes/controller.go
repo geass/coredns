@@ -72,6 +72,8 @@ type dnsControl struct {
 	epLister  cache.Indexer
 	nsLister  cache.Store
 
+	headlessEndpoints map[string]endpoints
+
 	// stopLock is used to enforce only a single call to Stop is active.
 	// Needed because we allow stopping through an http endpoint and
 	// allowing concurrent stoppers leads to stack traces.
@@ -80,10 +82,11 @@ type dnsControl struct {
 	stopCh   chan struct{}
 
 	// watch-related items channel
-	watchChan        dnswatch.Chan
-	watched          map[string]struct{}
-	zones            []string
-	endpointNameMode bool
+	watchChan          dnswatch.Chan
+	watched            map[string]struct{}
+	zones              []string
+	endpointNameMode   bool
+	revIdxAllEndpoints bool
 }
 
 type dnsControlOpts struct {
@@ -97,17 +100,22 @@ type dnsControlOpts struct {
 
 	zones            []string
 	endpointNameMode bool
+
+	revIdxAllEndpoints bool
 }
+
+type endpoints map[string]map[string]bool
 
 // newDNSController creates a controller for CoreDNS.
 func newdnsController(kubeClient *kubernetes.Clientset, opts dnsControlOpts) *dnsControl {
 	dns := dnsControl{
-		client:           kubeClient,
-		selector:         opts.selector,
-		stopCh:           make(chan struct{}),
-		watched:          make(map[string]struct{}),
-		zones:            opts.zones,
-		endpointNameMode: opts.endpointNameMode,
+		client:             kubeClient,
+		selector:           opts.selector,
+		stopCh:             make(chan struct{}),
+		watched:            make(map[string]struct{}),
+		zones:              opts.zones,
+		endpointNameMode:   opts.endpointNameMode,
+		revIdxAllEndpoints: opts.revIdxAllEndpoints,
 	}
 
 	dns.svcLister, dns.svcController = cache.NewIndexerInformer(
@@ -133,6 +141,10 @@ func newdnsController(kubeClient *kubernetes.Clientset, opts dnsControlOpts) *dn
 	}
 
 	if opts.initEndpointsCache {
+		indexers := map[string]cache.IndexFunc{epNameNamespaceIndex: epNameNamespaceIndexFunc}
+		if opts.revIdxAllEndpoints {
+			indexers[epIPIndex] = epIPIndexFunc
+		}
 		dns.epLister, dns.epController = cache.NewIndexerInformer(
 			&cache.ListWatch{
 				ListFunc:  endpointsListFunc(dns.client, api.NamespaceAll, dns.selector),
@@ -141,7 +153,7 @@ func newdnsController(kubeClient *kubernetes.Clientset, opts dnsControlOpts) *dn
 			&api.Endpoints{},
 			opts.resyncPeriod,
 			cache.ResourceEventHandlerFuncs{AddFunc: dns.Add, UpdateFunc: dns.Update, DeleteFunc: dns.Delete},
-			cache.Indexers{epNameNamespaceIndex: epNameNamespaceIndexFunc, epIPIndex: epIPIndexFunc})
+			indexers)
 	}
 
 	dns.nsLister, dns.nsController = cache.NewInformer(
@@ -421,7 +433,16 @@ func (dns *dnsControl) EpIndex(idx string) (ep []*api.Endpoints) {
 }
 
 func (dns *dnsControl) EpIndexReverse(ip string) (ep []*api.Endpoints) {
-	if dns.svcLister == nil {
+	if !dns.revIdxAllEndpoints {
+		for namespace, names := range dns.headlessEndpoints[ip] {
+			for name := range names {
+				ep = append(ep, dns.EpIndex(name+"."+namespace)...)
+			}
+		}
+		return ep
+	}
+
+	if dns.epLister == nil {
 		return nil
 	}
 	os, err := dns.epLister.ByIndex(epIPIndex, ip)
@@ -435,6 +456,7 @@ func (dns *dnsControl) EpIndexReverse(ip string) (ep []*api.Endpoints) {
 		}
 		ep = append(ep, e)
 	}
+
 	return ep
 }
 
@@ -548,6 +570,9 @@ func endpointsSubsetDiffs(a, b *api.Endpoints) *api.Endpoints {
 
 // sendUpdates sends a notification to the server if a watch is enabled for the qname.
 func (dns *dnsControl) sendUpdates(oldObj, newObj interface{}) {
+	if len(dns.watched) == 0 {
+		return
+	}
 	// If both objects have the same resource version, they are identical.
 	if newObj != nil && oldObj != nil && (oldObj.(meta.Object).GetResourceVersion() == newObj.(meta.Object).GetResourceVersion()) {
 		return
@@ -581,9 +606,140 @@ func (dns *dnsControl) sendUpdates(oldObj, newObj interface{}) {
 	}
 }
 
-func (dns *dnsControl) Add(obj interface{})               { dns.sendUpdates(nil, obj) }
-func (dns *dnsControl) Delete(obj interface{})            { dns.sendUpdates(obj, nil) }
-func (dns *dnsControl) Update(oldObj, newObj interface{}) { dns.sendUpdates(oldObj, newObj) }
+func (dns *dnsControl) Add(obj interface{}) {
+	dns.AddEndpoints(obj)
+	dns.sendUpdates(nil, obj)
+}
+
+func (dns *dnsControl) Delete(obj interface{}) {
+	dns.DeleteEndpoints(obj)
+	dns.sendUpdates(obj, nil)
+}
+
+func (dns *dnsControl) Update(oldObj, newObj interface{}) {
+	dns.UpdateEndpoints(oldObj, newObj)
+	dns.sendUpdates(oldObj, newObj)
+}
+
+func (dns *dnsControl) AddEndpoints(obj interface{}) {
+	if dns.revIdxAllEndpoints {
+		return
+	}
+
+	ep, ok := obj.(*api.Endpoints)
+	if !ok {
+		return
+	}
+	svcs, err := dns.svcLister.ByIndex(svcNameNamespaceIndex, ep.Name+"."+ep.Namespace)
+	if err != nil {
+		return
+	}
+	if len(svcs) != 1 {
+		return
+	}
+	svc, ok := svcs[0].(*api.Service)
+	if !ok {
+		return
+	}
+	if svc.Spec.ClusterIP != api.ClusterIPNone {
+		return
+	}
+	for _, s := range ep.Subsets {
+		for _, a := range s.Addresses {
+			dns.headlessEndpoints[a.IP][ep.Namespace][ep.Name] = true
+		}
+	}
+}
+
+func (dns *dnsControl) DeleteEndpoints(obj interface{}) {
+	if dns.revIdxAllEndpoints {
+		return
+	}
+	ep, ok := obj.(*api.Endpoints)
+	if !ok {
+		return
+	}
+	svcs, err := dns.svcLister.ByIndex(svcNameNamespaceIndex, ep.Name+"."+ep.Namespace)
+	if err != nil {
+		return
+	}
+	if len(svcs) != 1 {
+		return
+	}
+	svc, ok := svcs[0].(*api.Service)
+	if !ok {
+		return
+	}
+	if svc.Spec.ClusterIP != api.ClusterIPNone {
+		return
+	}
+	for ip := range dns.headlessEndpoints {
+		delete(dns.headlessEndpoints[ip][ep.Namespace], ep.Name)
+	}
+}
+
+func (dns *dnsControl) UpdateEndpoints(oldObj, newObj interface{}) {
+	if dns.revIdxAllEndpoints {
+		return
+	}
+	oldEp, ok := oldObj.(*api.Endpoints)
+	newEp, fine := newObj.(*api.Endpoints)
+	if !(ok && fine) {
+		return
+	}
+	svcs, err := dns.svcLister.ByIndex(svcNameNamespaceIndex, oldEp.Name+"."+oldEp.Namespace)
+	if err != nil {
+		return
+	}
+	if len(svcs) != 1 {
+		return
+	}
+	svc, ok := svcs[0].(*api.Service)
+	if !ok {
+		return
+	}
+	if svc.Spec.ClusterIP != api.ClusterIPNone {
+		return
+	}
+	for _, os := range oldEp.Subsets {
+		for _, oa := range os.Addresses {
+			found := false
+		FindDelete:
+			for _, ns := range newEp.Subsets {
+				for _, na := range ns.Addresses {
+					if oa.IP == na.IP {
+						found = true
+						break FindDelete
+					}
+				}
+			}
+			if !found {
+				// remove item from map
+				delete(dns.headlessEndpoints[oa.IP][oldEp.Namespace], oldEp.Name)
+			}
+		}
+	}
+	// Find new IPs (IPs in newEp, but not in oldEp)
+	for _, ns := range newEp.Subsets {
+		for _, na := range ns.Addresses {
+			found := false
+		FindAdd:
+			for _, os := range oldEp.Subsets {
+				for _, oa := range os.Addresses {
+					if oa.IP == na.IP {
+						found = true
+						break FindAdd
+					}
+				}
+			}
+			if !found {
+				// add item to map
+				dns.headlessEndpoints[na.IP][newEp.Namespace][newEp.Name] = true
+			}
+
+		}
+	}
+}
 
 // subsetsEquivalent checks if two endpoint subsets are significantly equivalent
 // I.e. that they have the same ready addresses, host names, ports (including protocol
