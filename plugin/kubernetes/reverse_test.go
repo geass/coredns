@@ -28,7 +28,7 @@ func (APIConnReverseTest) Watch(string) error              { return nil }
 func (APIConnReverseTest) StopWatching(string)             {}
 
 func (APIConnReverseTest) SvcIndex(svc string) []*api.Service {
-	if svc != "svc1.testns" {
+	if svc != "testns/svc1" {
 		return nil
 	}
 	svcs := []*api.Service{

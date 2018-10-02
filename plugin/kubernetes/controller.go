@@ -618,7 +618,7 @@ func (dns *dnsControl) AddEndpoints(obj interface{}) {
 	if !ok {
 		return
 	}
-	o, exists, err := dns.svcLister.GetByKey(metaNamespaceKey(ep.GetNamespace(), ep.GetName()))
+	o, exists, err := dns.svcLister.GetByKey(metaNamespaceKey(ep.ObjectMeta.Namespace, ep.ObjectMeta.Name))
 
 	if err != nil {
 		return
@@ -654,7 +654,7 @@ func (dns *dnsControl) DeleteEndpoints(obj interface{}) {
 	if !ok {
 		return
 	}
-	o, exists, err := dns.svcLister.GetByKey(metaNamespaceKey(ep.GetNamespace(), ep.GetName()))
+	o, exists, err := dns.svcLister.GetByKey(metaNamespaceKey(ep.ObjectMeta.Namespace, ep.ObjectMeta.Name))
 	if err != nil {
 		return
 	}
@@ -682,7 +682,7 @@ func (dns *dnsControl) UpdateEndpoints(oldObj, newObj interface{}) {
 	if !(ok && fine) {
 		return
 	}
-	o, exists, err := dns.svcLister.GetByKey(metaNamespaceKey(oldEp.GetNamespace(), oldEp.GetName()))
+	o, exists, err := dns.svcLister.GetByKey(metaNamespaceKey(oldEp.ObjectMeta.Namespace, oldEp.ObjectMeta.Name))
 	if err != nil {
 		return
 	}
@@ -736,8 +736,8 @@ func (dns *dnsControl) UpdateEndpoints(oldObj, newObj interface{}) {
 }
 
 func (dns *dnsControl) addEpToMap(ip string, ep *api.Endpoints){
-	namespace := ep.GetNamespace()
-	name := ep.GetName()
+	namespace := ep.ObjectMeta.Namespace
+	name := ep.ObjectMeta.Name
 	if dns.headlessEndpoints[ip] == nil {
 		dns.headlessEndpoints[ip] = make(endpoints)
 	}

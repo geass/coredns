@@ -391,7 +391,7 @@ func (APIConnServeTest) PodIndex(string) []*api.Pod {
 }
 
 var svcIndex = map[string][]*api.Service{
-	"svc1.testns": {{
+	"testns/svc1": {{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      "svc1",
 			Namespace: "testns",
@@ -406,7 +406,7 @@ var svcIndex = map[string][]*api.Service{
 			}},
 		},
 	}},
-	"svcempty.testns": {{
+	"testns/svcempty": {{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      "svcempty",
 			Namespace: "testns",
@@ -421,7 +421,7 @@ var svcIndex = map[string][]*api.Service{
 			}},
 		},
 	}},
-	"svc6.testns": {{
+	"testns/svc6": {{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      "svc6",
 			Namespace: "testns",
@@ -436,7 +436,7 @@ var svcIndex = map[string][]*api.Service{
 			}},
 		},
 	}},
-	"hdls1.testns": {{
+	"testns/hdls1": {{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      "hdls1",
 			Namespace: "testns",
@@ -446,7 +446,7 @@ var svcIndex = map[string][]*api.Service{
 			ClusterIP: api.ClusterIPNone,
 		},
 	}},
-	"external.testns": {{
+	"testns/external": {{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      "external",
 			Namespace: "testns",
@@ -461,7 +461,7 @@ var svcIndex = map[string][]*api.Service{
 			Type: api.ServiceTypeExternalName,
 		},
 	}},
-	"external-to-service.testns": {{
+	"testns/external-to-service": {{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      "external-to-service",
 			Namespace: "testns",
@@ -476,7 +476,7 @@ var svcIndex = map[string][]*api.Service{
 			Type: api.ServiceTypeExternalName,
 		},
 	}},
-	"hdlsprtls.testns": {{
+	"testns/hdlsprtls": {{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      "hdlsprtls",
 			Namespace: "testns",
@@ -486,7 +486,7 @@ var svcIndex = map[string][]*api.Service{
 			ClusterIP: api.ClusterIPNone,
 		},
 	}},
-	"svc1.unexposedns": {{
+	"unexposedns/svc1": {{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      "svc1",
 			Namespace: "unexposedns",
@@ -516,7 +516,7 @@ func (APIConnServeTest) ServiceList() []*api.Service {
 }
 
 var epsIndex = map[string][]*api.Endpoints{
-	"svc1.testns": {{
+	"testns/svc1": {{
 		Subsets: []api.EndpointSubset{
 			{
 				Addresses: []api.EndpointAddress{
@@ -539,7 +539,7 @@ var epsIndex = map[string][]*api.Endpoints{
 			Namespace: "testns",
 		},
 	}},
-	"svcempty.testns": {{
+	"testns/svcempty": {{
 		Subsets: []api.EndpointSubset{
 			{
 				Addresses: nil,
@@ -557,7 +557,7 @@ var epsIndex = map[string][]*api.Endpoints{
 			Namespace: "testns",
 		},
 	}},
-	"hdls1.testns": {{
+	"testns/hdls1": {{
 		Subsets: []api.EndpointSubset{
 			{
 				Addresses: []api.EndpointAddress{
@@ -596,7 +596,7 @@ var epsIndex = map[string][]*api.Endpoints{
 			Namespace: "testns",
 		},
 	}},
-	"hdlsprtls.testns": {{
+	"testns/hdlsprtls": {{
 		Subsets: []api.EndpointSubset{
 			{
 				Addresses: []api.EndpointAddress{
