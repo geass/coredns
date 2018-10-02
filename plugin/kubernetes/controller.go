@@ -70,7 +70,7 @@ type dnsControl struct {
 	epLister  cache.Indexer
 	nsLister  cache.Store
 
-	headlessEndpoints map[string]endpoints
+	headlessEndpoints *endpointips
 
 	// stopLock is used to enforce only a single call to Stop is active.
 	// Needed because we allow stopping through an http endpoint and
@@ -102,8 +102,6 @@ type dnsControlOpts struct {
 	revIdxAllEndpoints bool
 }
 
-type endpoints map[string]map[string]bool
-
 // newDNSController creates a controller for CoreDNS.
 func newdnsController(kubeClient *kubernetes.Clientset, opts dnsControlOpts) *dnsControl {
 	dns := dnsControl{
@@ -117,7 +115,7 @@ func newdnsController(kubeClient *kubernetes.Clientset, opts dnsControlOpts) *dn
 	}
 
 	if !dns.revIdxAllEndpoints {
-		dns.headlessEndpoints = make(map[string]endpoints)
+		dns.headlessEndpoints = NewEndpointIPs()
 	}
 
 	dns.svcLister, dns.svcController = cache.NewIndexerInformer(
@@ -422,11 +420,13 @@ func (dns *dnsControl) EpIndex(key string) (ep []*api.Endpoints) {
 
 func (dns *dnsControl) EpIndexReverse(ip string) (ep []*api.Endpoints) {
 	if !dns.revIdxAllEndpoints {
-		for namespace, names := range dns.headlessEndpoints[ip] {
+		dns.headlessEndpoints.mutex.Lock()
+		for namespace, names := range dns.headlessEndpoints.store[ip] {
 			for name := range names {
 				ep = append(ep, dns.EpIndex(metaNamespaceKey(namespace, name))...)
 			}
 		}
+		dns.headlessEndpoints.mutex.Unlock()
 		return ep
 	}
 
@@ -480,7 +480,7 @@ func (dns *dnsControl) GetNamespaceByName(name string) (*api.Namespace, error) {
 		if !ok {
 			continue
 		}
-		if name == ns.ObjectMeta.Name {
+		if name == ns.GetName() {
 			return ns, nil
 		}
 	}
@@ -609,143 +609,6 @@ func (dns *dnsControl) Update(oldObj, newObj interface{}) {
 	dns.sendUpdates(oldObj, newObj)
 }
 
-func (dns *dnsControl) AddEndpoints(obj interface{}) {
-	if dns.revIdxAllEndpoints {
-		return
-	}
-
-	ep, ok := obj.(*api.Endpoints)
-	if !ok {
-		return
-	}
-	o, exists, err := dns.svcLister.GetByKey(metaNamespaceKey(ep.ObjectMeta.Namespace, ep.ObjectMeta.Name))
-
-	if err != nil {
-		return
-	}
-	if !exists {
-		return
-	}
-	svc, ok := o.(*api.Service)
-	if !ok {
-		return
-	}
-	if svc.Spec.ClusterIP != api.ClusterIPNone {
-		return
-	}
-	for _, s := range ep.Subsets {
-		for _, a := range s.Addresses {
-			if dns.headlessEndpoints[a.IP] == nil {
-				dns.headlessEndpoints[a.IP] = make(endpoints)
-			}
-			if dns.headlessEndpoints[a.IP][ep.Namespace] == nil {
-				dns.headlessEndpoints[a.IP][ep.Namespace] = make(map[string]bool)
-			}
-			dns.addEpToMap(a.IP, ep)
-		}
-	}
-}
-
-func (dns *dnsControl) DeleteEndpoints(obj interface{}) {
-	if dns.revIdxAllEndpoints {
-		return
-	}
-	ep, ok := obj.(*api.Endpoints)
-	if !ok {
-		return
-	}
-	o, exists, err := dns.svcLister.GetByKey(metaNamespaceKey(ep.ObjectMeta.Namespace, ep.ObjectMeta.Name))
-	if err != nil {
-		return
-	}
-	if !exists {
-		return
-	}
-	svc, ok := o.(*api.Service)
-	if !ok {
-		return
-	}
-	if svc.Spec.ClusterIP != api.ClusterIPNone {
-		return
-	}
-	for ip := range dns.headlessEndpoints {
-		delete(dns.headlessEndpoints[ip][ep.Namespace], ep.Name)
-	}
-}
-
-func (dns *dnsControl) UpdateEndpoints(oldObj, newObj interface{}) {
-	if dns.revIdxAllEndpoints {
-		return
-	}
-	oldEp, ok := oldObj.(*api.Endpoints)
-	newEp, fine := newObj.(*api.Endpoints)
-	if !(ok && fine) {
-		return
-	}
-	o, exists, err := dns.svcLister.GetByKey(metaNamespaceKey(oldEp.ObjectMeta.Namespace, oldEp.ObjectMeta.Name))
-	if err != nil {
-		return
-	}
-	if !exists {
-		return
-	}
-	svc, ok := o.(*api.Service)
-	if !ok {
-		return
-	}
-	if svc.Spec.ClusterIP != api.ClusterIPNone {
-		return
-	}
-	for _, os := range oldEp.Subsets {
-		for _, oa := range os.Addresses {
-			found := false
-		FindDelete:
-			for _, ns := range newEp.Subsets {
-				for _, na := range ns.Addresses {
-					if oa.IP == na.IP {
-						found = true
-						break FindDelete
-					}
-				}
-			}
-			if !found {
-				// remove item from map
-				delete(dns.headlessEndpoints[oa.IP][oldEp.Namespace], oldEp.Name)
-			}
-		}
-	}
-	// Find new IPs (IPs in newEp, but not in oldEp)
-	for _, ns := range newEp.Subsets {
-		for _, na := range ns.Addresses {
-			found := false
-		FindAdd:
-			for _, os := range oldEp.Subsets {
-				for _, oa := range os.Addresses {
-					if oa.IP == na.IP {
-						found = true
-						break FindAdd
-					}
-				}
-			}
-			if !found {
-				// add item to map
-				dns.addEpToMap(na.IP, newEp)
-			}
-		}
-	}
-}
-
-func (dns *dnsControl) addEpToMap(ip string, ep *api.Endpoints) {
-	namespace := ep.ObjectMeta.Namespace
-	name := ep.ObjectMeta.Name
-	if dns.headlessEndpoints[ip] == nil {
-		dns.headlessEndpoints[ip] = make(endpoints)
-	}
-	if dns.headlessEndpoints[ip][namespace] == nil {
-		dns.headlessEndpoints[ip][namespace] = make(map[string]bool)
-	}
-	dns.headlessEndpoints[ip][namespace][name] = true
-}
 
 // subsetsEquivalent checks if two endpoint subsets are significantly equivalent
 // I.e. that they have the same ready addresses, host names, ports (including protocol
