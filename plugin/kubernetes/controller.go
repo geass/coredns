@@ -735,7 +735,7 @@ func (dns *dnsControl) UpdateEndpoints(oldObj, newObj interface{}) {
 	}
 }
 
-func (dns *dnsControl) addEpToMap(ip string, ep *api.Endpoints){
+func (dns *dnsControl) addEpToMap(ip string, ep *api.Endpoints) {
 	namespace := ep.ObjectMeta.Namespace
 	name := ep.ObjectMeta.Name
 	if dns.headlessEndpoints[ip] == nil {
