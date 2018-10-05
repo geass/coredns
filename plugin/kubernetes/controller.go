@@ -554,9 +554,6 @@ func endpointsSubsetDiffs(a, b *api.Endpoints) *api.Endpoints {
 
 // sendUpdates sends a notification to the server if a watch is enabled for the qname.
 func (dns *dnsControl) sendUpdates(oldObj, newObj interface{}) {
-	if len(dns.watched) == 0 {
-		return
-	}
 	// If both objects have the same resource version, they are identical.
 	if newObj != nil && oldObj != nil && (oldObj.(meta.Object).GetResourceVersion() == newObj.(meta.Object).GetResourceVersion()) {
 		return
