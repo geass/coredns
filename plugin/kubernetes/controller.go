@@ -367,7 +367,7 @@ func (dns *dnsControl) PodIndex(ip string) (pods []*api.Pod) {
 	return nil
 }
 
-func (dns *dnsControl) SvcIndex(key string) (*api.Service) {
+func (dns *dnsControl) SvcIndex(key string) *api.Service {
 	o, _, err := dns.svcLister.GetByKey(key)
 	if err != nil {
 		return nil
@@ -380,7 +380,7 @@ func (dns *dnsControl) SvcIndex(key string) (*api.Service) {
 	return s
 }
 
-func (dns *dnsControl) SvcIndexReverse(ip string) (*api.Service) {
+func (dns *dnsControl) SvcIndexReverse(ip string) *api.Service {
 	if dns.svcLister == nil {
 		return nil
 	}
@@ -399,7 +399,7 @@ func (dns *dnsControl) SvcIndexReverse(ip string) (*api.Service) {
 	return nil
 }
 
-func (dns *dnsControl) EpIndex(key string) (*api.Endpoints) {
+func (dns *dnsControl) EpIndex(key string) *api.Endpoints {
 	if dns.epLister == nil {
 		return nil
 	}
