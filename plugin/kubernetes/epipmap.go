@@ -34,16 +34,8 @@ func (dns *dnsControl) AddEndpoints(obj interface{}) {
 			if err != nil {
 				return
 			}
-
-			o, exists, err := dns.epLister.GetByKey(key)
-			if err != nil {
-				return
-			}
-			if !exists {
-				return
-			}
-			ep, ok := o.(*api.Endpoints)
-			if !ok {
+			ep := dns.EpIndex(key)
+			if ep == nil {
 				return
 			}
 			dns.DeleteEndpoints(ep)
@@ -55,17 +47,8 @@ func (dns *dnsControl) AddEndpoints(obj interface{}) {
 	if err != nil {
 		return
 	}
-
-	o, exists, err := dns.svcLister.GetByKey(key)
-	if err != nil {
-		return
-	}
-
-	if exists {
-		svc, ok := o.(*api.Service)
-		if !ok {
-			return
-		}
+	svc := dns.SvcIndex(key)
+	if svc != nil {
 		if svc.Spec.ClusterIP != api.ClusterIPNone {
 			return
 		}
@@ -85,26 +68,10 @@ func (dns *dnsControl) DeleteEndpoints(obj interface{}) {
 	if !ok {
 		return
 	}
-	key, err := cache.MetaNamespaceKeyFunc(ep)
-	if err != nil {
-		return
-	}
-	o, exists, err := dns.svcLister.GetByKey(key)
-	if err != nil {
-		return
-	}
-	if !exists {
-		return
-	}
-	svc, ok := o.(*api.Service)
-	if !ok {
-		return
-	}
-	if svc.Spec.ClusterIP != api.ClusterIPNone {
-		return
-	}
-	for ip := range dns.headlessEndpoints.keys {
-		dns.headlessEndpoints.delete(ip)
+	for _, s := range ep.Subsets {
+		for _, a := range s.Addresses {
+			dns.headlessEndpoints.delete(a.IP)
+		}
 	}
 }
 
@@ -121,15 +88,8 @@ func (dns *dnsControl) UpdateEndpoints(oldObj, newObj interface{}) {
 	if err != nil {
 		return
 	}
-	o, exists, err := dns.svcLister.GetByKey(key)
-	if err != nil {
-		return
-	}
-	if !exists {
-		return
-	}
-	svc, ok := o.(*api.Service)
-	if !ok {
+	svc := dns.SvcIndex(key)
+	if svc == nil {
 		return
 	}
 	if svc.Spec.ClusterIP != api.ClusterIPNone {
@@ -197,4 +157,3 @@ func (e *endpointips) delete(ip string) {
 	delete(e.keys, ip)
 	e.mutex.Unlock()
 }
-
