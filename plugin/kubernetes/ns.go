@@ -23,13 +23,15 @@ func (k *Kubernetes) nsAddr() *dns.A {
 	rr.A = localIP
 
 	ep := k.APIConn.EpIndexReverse(localIP.String())
-FindEndpoint:
-	for _, eps := range ep.Subsets {
-		for _, addr := range eps.Addresses {
-			if localIP.Equal(net.ParseIP(addr.IP)) {
-				svcNamespace = ep.ObjectMeta.Namespace
-				svcName = ep.ObjectMeta.Name
-				break FindEndpoint
+	if ep != nil {
+	FindEndpoint:
+		for _, eps := range ep.Subsets {
+			for _, addr := range eps.Addresses {
+				if localIP.Equal(net.ParseIP(addr.IP)) {
+					svcNamespace = ep.ObjectMeta.Namespace
+					svcName = ep.ObjectMeta.Name
+					break FindEndpoint
+				}
 			}
 		}
 	}

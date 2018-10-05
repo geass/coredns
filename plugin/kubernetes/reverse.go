@@ -39,7 +39,7 @@ func (k *Kubernetes) serviceRecordForIP(ip, name string) *msg.Service {
 	}
 	// If no cluster ips match, search endpoints
 	ep := k.APIConn.EpIndexReverse(ip)
-	if len(k.Namespaces) > 0 && !k.namespaceExposed(ep.ObjectMeta.Namespace) {
+	if ep == nil || len(k.Namespaces) > 0 && !k.namespaceExposed(ep.ObjectMeta.Namespace) {
 		return nil
 	}
 	for _, eps := range ep.Subsets {

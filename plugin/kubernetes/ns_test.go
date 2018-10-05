@@ -15,7 +15,6 @@ func (APIConnTest) HasSynced() bool                     { return true }
 func (APIConnTest) Run()                                { return }
 func (APIConnTest) Stop() error                         { return nil }
 func (APIConnTest) PodIndex(string) []*api.Pod          { return nil }
-func (APIConnTest) SvcIndex(string) *api.Service        { return nil }
 func (APIConnTest) SvcIndexReverse(string) *api.Service { return nil }
 func (APIConnTest) EpIndex(string) *api.Endpoints       { return nil }
 func (APIConnTest) EndpointsList() []*api.Endpoints     { return nil }
@@ -23,6 +22,10 @@ func (APIConnTest) Modified() int64                     { return 0 }
 func (APIConnTest) SetWatchChan(watch.Chan)             {}
 func (APIConnTest) Watch(string) error                  { return nil }
 func (APIConnTest) StopWatching(string)                 {}
+
+func (a APIConnTest) SvcIndex(string) *api.Service {
+	return a.ServiceList()[0]
+}
 
 func (APIConnTest) ServiceList() []*api.Service {
 	svcs := []*api.Service{
