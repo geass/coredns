@@ -419,7 +419,11 @@ func (dns *dnsControl) EpIndex(key string) (*api.Endpoints) {
 
 func (dns *dnsControl) EpIndexReverse(ip string) (ep *api.Endpoints) {
 	if !dns.revIdxAllEndpoints {
-		return dns.EpIndex(*dns.headlessEndpoints.keys[ip])
+		key := dns.headlessEndpoints.keys[ip]
+		if key == nil {
+			return nil
+		}
+		return dns.EpIndex(*key)
 	}
 
 	if dns.epLister == nil {
