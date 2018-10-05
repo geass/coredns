@@ -22,15 +22,14 @@ func (k *Kubernetes) nsAddr() *dns.A {
 	localIP := k.interfaceAddrsFunc()
 	rr.A = localIP
 
+	ep := k.APIConn.EpIndexReverse(localIP.String())
 FindEndpoint:
-	for _, ep := range k.APIConn.EpIndexReverse(localIP.String()) {
-		for _, eps := range ep.Subsets {
-			for _, addr := range eps.Addresses {
-				if localIP.Equal(net.ParseIP(addr.IP)) {
-					svcNamespace = ep.ObjectMeta.Namespace
-					svcName = ep.ObjectMeta.Name
-					break FindEndpoint
-				}
+	for _, eps := range ep.Subsets {
+		for _, addr := range eps.Addresses {
+			if localIP.Equal(net.ParseIP(addr.IP)) {
+				svcNamespace = ep.ObjectMeta.Namespace
+				svcName = ep.ObjectMeta.Name
+				break FindEndpoint
 			}
 		}
 	}
@@ -41,15 +40,12 @@ FindEndpoint:
 		return rr
 	}
 
-FindService:
-	for _, svc := range k.APIConn.ServiceList() {
-		if svcName == svc.Name && svcNamespace == svc.Namespace {
-			if svc.Spec.ClusterIP == api.ClusterIPNone {
-				rr.A = localIP
-			} else {
-				rr.A = net.ParseIP(svc.Spec.ClusterIP)
-			}
-			break FindService
+	svc := k.APIConn.SvcIndex(metaNamespaceKey(svcNamespace, svcName))
+	if svc != nil {
+		if svc.Spec.ClusterIP == api.ClusterIPNone {
+			rr.A = localIP
+		} else {
+			rr.A = net.ParseIP(svc.Spec.ClusterIP)
 		}
 	}
 

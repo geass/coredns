@@ -27,12 +27,14 @@ const (
 
 type dnsController interface {
 	ServiceList() []*api.Service
-	SvcIndex(string) []*api.Service
-	SvcIndexReverse(string) []*api.Service
-	PodIndex(string) []*api.Pod
-	EpIndex(string) []*api.Endpoints
-	EpIndexReverse(string) []*api.Endpoints
 	EndpointsList() []*api.Endpoints
+
+	SvcIndex(string) *api.Service
+	PodIndex(string) []*api.Pod
+	EpIndex(string) *api.Endpoints
+
+	SvcIndexReverse(string) *api.Service
+	EpIndexReverse(string) *api.Endpoints
 
 	GetNodeByName(string) (*api.Node, error)
 	GetNamespaceByName(string) (*api.Namespace, error)
@@ -360,12 +362,12 @@ func (dns *dnsControl) PodIndex(ip string) (pods []*api.Pod) {
 		if !ok {
 			continue
 		}
-		pods = append(pods, p)
+		return []*api.Pod{p}
 	}
-	return pods
+	return nil
 }
 
-func (dns *dnsControl) SvcIndex(key string) (svcs []*api.Service) {
+func (dns *dnsControl) SvcIndex(key string) (*api.Service) {
 	if dns.svcLister == nil {
 		return nil
 	}
@@ -374,16 +376,14 @@ func (dns *dnsControl) SvcIndex(key string) (svcs []*api.Service) {
 		return nil
 	}
 	s, ok := o.(*api.Service)
-
 	if !ok {
-		return
+		return nil
 	}
-	svcs = append(svcs, s)
 
-	return svcs
+	return s
 }
 
-func (dns *dnsControl) SvcIndexReverse(ip string) (svcs []*api.Service) {
+func (dns *dnsControl) SvcIndexReverse(ip string) (*api.Service) {
 	if dns.svcLister == nil {
 		return nil
 	}
@@ -397,12 +397,12 @@ func (dns *dnsControl) SvcIndexReverse(ip string) (svcs []*api.Service) {
 		if !ok {
 			continue
 		}
-		svcs = append(svcs, s)
+		return s
 	}
-	return svcs
+	return nil
 }
 
-func (dns *dnsControl) EpIndex(key string) (ep []*api.Endpoints) {
+func (dns *dnsControl) EpIndex(key string) (*api.Endpoints) {
 	if dns.epLister == nil {
 		return nil
 	}
@@ -412,22 +412,14 @@ func (dns *dnsControl) EpIndex(key string) (ep []*api.Endpoints) {
 	}
 	e, ok := o.(*api.Endpoints)
 	if !ok {
-		return
+		return nil
 	}
-	ep = append(ep, e)
-	return ep
+	return e
 }
 
-func (dns *dnsControl) EpIndexReverse(ip string) (ep []*api.Endpoints) {
+func (dns *dnsControl) EpIndexReverse(ip string) (ep *api.Endpoints) {
 	if !dns.revIdxAllEndpoints {
-		dns.headlessEndpoints.mutex.Lock()
-		for namespace, names := range dns.headlessEndpoints.store[ip] {
-			for name := range names {
-				ep = append(ep, dns.EpIndex(metaNamespaceKey(namespace, name))...)
-			}
-		}
-		dns.headlessEndpoints.mutex.Unlock()
-		return ep
+		return dns.EpIndex(*dns.headlessEndpoints.keys[ip])
 	}
 
 	if dns.epLister == nil {
@@ -442,10 +434,10 @@ func (dns *dnsControl) EpIndexReverse(ip string) (ep []*api.Endpoints) {
 		if !ok {
 			continue
 		}
-		ep = append(ep, e)
+		return e
 	}
 
-	return ep
+	return nil
 }
 
 func (dns *dnsControl) EndpointsList() (eps []*api.Endpoints) {
@@ -608,7 +600,6 @@ func (dns *dnsControl) Update(oldObj, newObj interface{}) {
 	dns.UpdateEndpoints(oldObj, newObj)
 	dns.sendUpdates(oldObj, newObj)
 }
-
 
 // subsetsEquivalent checks if two endpoint subsets are significantly equivalent
 // I.e. that they have the same ready addresses, host names, ports (including protocol

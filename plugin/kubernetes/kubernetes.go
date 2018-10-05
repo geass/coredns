@@ -440,8 +440,8 @@ func (k *Kubernetes) findServices(r recordRequest, zone string) (services []msg.
 		endpointsListFunc = func() []*api.Endpoints { return k.APIConn.EndpointsList() }
 	} else {
 		key := metaNamespaceKey(r.namespace, r.service)
-		serviceList = k.APIConn.SvcIndex(key)
-		endpointsListFunc = func() []*api.Endpoints { return k.APIConn.EpIndex(key) }
+		serviceList = []*api.Service{k.APIConn.SvcIndex(key)}
+		endpointsListFunc = func() []*api.Endpoints { return []*api.Endpoints{k.APIConn.EpIndex(key)} }
 	}
 
 	for _, svc := range serviceList {

@@ -4,18 +4,17 @@ import (
 	"sync"
 
 	api "k8s.io/api/core/v1"
+	"k8s.io/client-go/tools/cache"
 )
 
 type endpointips struct {
-	store map[string]endpoints
+	keys  map[string]*string
 	mutex sync.Mutex
 }
 
-type endpoints map[string]map[string]bool
-
 func NewEndpointIPs() *endpointips {
 	epips := new(endpointips)
-	epips.store = make(map[string]endpoints)
+	epips.keys = make(map[string]*string)
 	return epips
 }
 
@@ -31,7 +30,12 @@ func (dns *dnsControl) AddEndpoints(obj interface{}) {
 			return
 		}
 		if svc.Spec.ClusterIP != api.ClusterIPNone {
-			o, exists, err := dns.epLister.GetByKey(metaNamespaceKey(svc.GetNamespace(), svc.GetName()))
+			key, err := cache.MetaNamespaceKeyFunc(svc)
+			if err != nil {
+				return
+			}
+
+			o, exists, err := dns.epLister.GetByKey(key)
 			if err != nil {
 				return
 			}
@@ -46,11 +50,17 @@ func (dns *dnsControl) AddEndpoints(obj interface{}) {
 		}
 		return
 	}
-	o, exists, err := dns.svcLister.GetByKey(metaNamespaceKey(ep.GetNamespace(), ep.GetName()))
 
+	key, err := cache.MetaNamespaceKeyFunc(ep)
 	if err != nil {
 		return
 	}
+
+	o, exists, err := dns.svcLister.GetByKey(key)
+	if err != nil {
+		return
+	}
+
 	if exists {
 		svc, ok := o.(*api.Service)
 		if !ok {
@@ -62,7 +72,7 @@ func (dns *dnsControl) AddEndpoints(obj interface{}) {
 	}
 	for _, s := range ep.Subsets {
 		for _, a := range s.Addresses {
-			dns.addEpToMap(a.IP, ep)
+			dns.headlessEndpoints.add(a.IP, ep)
 		}
 	}
 }
@@ -75,7 +85,11 @@ func (dns *dnsControl) DeleteEndpoints(obj interface{}) {
 	if !ok {
 		return
 	}
-	o, exists, err := dns.svcLister.GetByKey(metaNamespaceKey(ep.GetNamespace(), ep.GetName()))
+	key, err := cache.MetaNamespaceKeyFunc(ep)
+	if err != nil {
+		return
+	}
+	o, exists, err := dns.svcLister.GetByKey(key)
 	if err != nil {
 		return
 	}
@@ -89,8 +103,8 @@ func (dns *dnsControl) DeleteEndpoints(obj interface{}) {
 	if svc.Spec.ClusterIP != api.ClusterIPNone {
 		return
 	}
-	for ip := range dns.headlessEndpoints.store {
-		dns.deleteIpFromMap(ip)
+	for ip := range dns.headlessEndpoints.keys {
+		dns.headlessEndpoints.delete(ip)
 	}
 }
 
@@ -103,7 +117,11 @@ func (dns *dnsControl) UpdateEndpoints(oldObj, newObj interface{}) {
 	if !(ok && fine) {
 		return
 	}
-	o, exists, err := dns.svcLister.GetByKey(metaNamespaceKey(oldEp.GetNamespace(), oldEp.GetName()))
+	key, err := cache.MetaNamespaceKeyFunc(oldEp)
+	if err != nil {
+		return
+	}
+	o, exists, err := dns.svcLister.GetByKey(key)
 	if err != nil {
 		return
 	}
@@ -131,7 +149,7 @@ func (dns *dnsControl) UpdateEndpoints(oldObj, newObj interface{}) {
 			}
 			if !found {
 				// remove item from map
-				dns.deleteIpFromMap(oa.IP)
+				dns.headlessEndpoints.delete(oa.IP)
 			}
 		}
 	}
@@ -150,28 +168,33 @@ func (dns *dnsControl) UpdateEndpoints(oldObj, newObj interface{}) {
 			}
 			if !found {
 				// add item to map
-				dns.addEpToMap(na.IP, newEp)
+				dns.headlessEndpoints.add(na.IP, newEp)
 			}
 		}
 	}
 }
 
-func (dns *dnsControl) addEpToMap(ip string, ep *api.Endpoints) {
-	namespace := ep.GetNamespace()
-	name := ep.GetName()
-	dns.headlessEndpoints.mutex.Lock()
-	if dns.headlessEndpoints.store[ip] == nil {
-		dns.headlessEndpoints.store[ip] = make(endpoints)
-	}
-	if dns.headlessEndpoints.store[ip][namespace] == nil {
-		dns.headlessEndpoints.store[ip][namespace] = make(map[string]bool)
-	}
-	dns.headlessEndpoints.store[ip][namespace][name] = true
-	dns.headlessEndpoints.mutex.Unlock()
+func (e *endpointips) get(ip string) string {
+	e.mutex.Lock()
+	ep := e.keys[ip]
+	e.mutex.Unlock()
+	return *ep
 }
 
-func (dns *dnsControl) deleteIpFromMap(ip string) {
-	dns.headlessEndpoints.mutex.Lock()
-	delete(dns.headlessEndpoints.store, ip)
-	dns.headlessEndpoints.mutex.Unlock()
+func (e *endpointips) add(ip string, ep *api.Endpoints) {
+	epKey, err := cache.MetaNamespaceKeyFunc(ep)
+	if err != nil {
+		return
+	}
+	e.mutex.Lock()
+	e.keys[ip] = &epKey
+	e.mutex.Unlock()
 }
+
+func (e *endpointips) delete(ip string) {
+	e.mutex.Lock()
+	e.keys[ip] = nil
+	delete(e.keys, ip)
+	e.mutex.Unlock()
+}
+
