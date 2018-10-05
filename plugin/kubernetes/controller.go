@@ -368,9 +368,6 @@ func (dns *dnsControl) PodIndex(ip string) (pods []*api.Pod) {
 }
 
 func (dns *dnsControl) SvcIndex(key string) (*api.Service) {
-	if dns.svcLister == nil {
-		return nil
-	}
 	o, _, err := dns.svcLister.GetByKey(key)
 	if err != nil {
 		return nil
