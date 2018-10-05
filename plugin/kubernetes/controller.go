@@ -117,7 +117,7 @@ func newdnsController(kubeClient *kubernetes.Clientset, opts dnsControlOpts) *dn
 	}
 
 	if !dns.revIdxAllEndpoints {
-		dns.headlessEndpoints = NewEndpointIPs()
+		dns.headlessEndpoints = newEndpointIPs()
 	}
 
 	dns.svcLister, dns.svcController = cache.NewIndexerInformer(

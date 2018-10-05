@@ -12,7 +12,7 @@ type endpointips struct {
 	mutex sync.Mutex
 }
 
-func NewEndpointIPs() *endpointips {
+func newEndpointIPs() *endpointips {
 	epips := new(endpointips)
 	epips.keys = make(map[string]*string)
 	return epips
