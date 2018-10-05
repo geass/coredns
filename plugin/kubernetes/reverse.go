@@ -32,7 +32,7 @@ func (k *Kubernetes) serviceRecordForIP(ip, name string) *msg.Service {
 	service := k.APIConn.SvcIndexReverse(ip)
 	if service != nil {
 		if len(k.Namespaces) > 0 && !k.namespaceExposed(service.Namespace) {
-			return &msg.Service{}
+			return nil
 		}
 		domain := strings.Join([]string{service.Name, service.Namespace, Svc, k.primaryZone()}, ".")
 		return &msg.Service{Host: domain, TTL: k.ttl}
@@ -50,5 +50,5 @@ func (k *Kubernetes) serviceRecordForIP(ip, name string) *msg.Service {
 			}
 		}
 	}
-	return &msg.Service{}
+	return nil
 }
