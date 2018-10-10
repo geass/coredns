@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/coredns/coredns/plugin/etcd/msg"
 	"github.com/coredns/coredns/plugin/pkg/dnsutil"
@@ -27,12 +28,15 @@ const (
 // returned as a CNAME for federation(s) to work.
 func (k *Kubernetes) Federations(state request.Request, fname, fzone string) (msg.Service, error) {
 	nodeName := k.localNodeName()
+	fmt.Printf("Node Name: %v\n", nodeName)
 	node, err := k.APIConn.GetNodeByName(nodeName)
 	if err != nil {
+		fmt.Printf("Could not find node with name: %v, %v\n", nodeName, err)
 		return msg.Service{}, err
 	}
 	r, err := parseRequest(state)
 	if err != nil {
+		fmt.Printf("Parse Error: %v\n", err)
 		return msg.Service{}, err
 	}
 
@@ -40,10 +44,12 @@ func (k *Kubernetes) Federations(state request.Request, fname, fzone string) (ms
 	lr := node.Labels[LabelRegion]
 
 	if lz == "" || lr == "" {
+		fmt.Printf("Labels Missing: Zone=%v, Region=%v\n", lz, lr)
 		return msg.Service{}, errors.New("local node missing zone/region labels")
 	}
 
 	if r.endpoint == "" {
+		fmt.Printf("CNAME target = %v\n", dnsutil.Join(r.service, r.namespace, fname, r.podOrSvc, lz, lr, fzone))
 		return msg.Service{Host: dnsutil.Join(r.service, r.namespace, fname, r.podOrSvc, lz, lr, fzone)}, nil
 	}
 

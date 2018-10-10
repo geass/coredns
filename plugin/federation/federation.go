@@ -15,6 +15,7 @@ package federation
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/etcd/msg"
@@ -28,9 +29,9 @@ import (
 
 // Federation contains the name to zone mapping used for federation in kubernetes.
 type Federation struct {
-	f     map[string]string
-	zones []string
-	Upstream         *upstream.Upstream
+	f        map[string]string
+	zones    []string
+	Upstream *upstream.Upstream
 
 	Next        plugin.Handler
 	Federations Func
@@ -108,7 +109,11 @@ func (f *Federation) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.
 	m.Answer = []dns.RR{service.NewCNAME(state.QName(), service.Host)}
 
 	if f.Upstream != nil {
+		fmt.Printf("Checking Upstream\n")
 		aRecord, err := f.Upstream.Lookup(state, service.Host, state.QType())
+		if err != nil {
+			fmt.Printf("Checking Upstream Error: %v\n", err)
+		}
 		if err == nil && aRecord != nil && len(aRecord.Answer) > 0 {
 			m.Answer = append(m.Answer, aRecord.Answer...)
 		}
