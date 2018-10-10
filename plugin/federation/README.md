@@ -17,7 +17,7 @@ Enabling *federation* without also having *kubernetes* is a noop.
 ~~~
 federation [ZONES...] {
     NAME DOMAIN
-    upstream [DEST]
+    upstream [ADDRESS...]
 }
 ~~~
 
@@ -38,6 +38,7 @@ Here we handle all service requests in the `prod` and `stage` federations.
     federation cluster.local {
         prod prod.feddomain.com
         staging staging.feddomain.com
+        upstream
     }
 }
 ~~~
@@ -50,6 +51,7 @@ cluster.local {
     federation {
         prod prod.feddomain.com
         staging staging.feddomain.com
+        upstream
     }
 }
 ~~~
