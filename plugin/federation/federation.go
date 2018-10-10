@@ -20,6 +20,7 @@ import (
 	"github.com/coredns/coredns/plugin/etcd/msg"
 	"github.com/coredns/coredns/plugin/pkg/dnsutil"
 	"github.com/coredns/coredns/plugin/pkg/nonwriter"
+	"github.com/coredns/coredns/plugin/pkg/upstream"
 	"github.com/coredns/coredns/request"
 
 	"github.com/miekg/dns"
@@ -29,6 +30,7 @@ import (
 type Federation struct {
 	f     map[string]string
 	zones []string
+	Upstream         upstream.Upstream
 
 	Next        plugin.Handler
 	Federations Func
@@ -104,6 +106,11 @@ func (f *Federation) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.
 	m.Authoritative, m.RecursionAvailable = true, true
 
 	m.Answer = []dns.RR{service.NewCNAME(state.QName(), service.Host)}
+
+	aRecord, err := f.Upstream.Lookup(state, service.Host, state.QType())
+	if err == nil && aRecord != nil && len(aRecord.Answer) > 0 {
+		m.Answer = append(m.Answer, aRecord.Answer...)
+	}
 
 	w.WriteMsg(m)
 	return dns.RcodeSuccess, nil
