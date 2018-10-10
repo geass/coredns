@@ -69,7 +69,7 @@ func federationParse(c *caddy.Controller) (*Federation, error) {
 				if err != nil {
 					return nil, err
 				}
-				fed.Upstream = u
+				fed.Upstream = &u
 			default:
 				args := c.RemainingArgs()
 				if x := len(args); x != 1 {
