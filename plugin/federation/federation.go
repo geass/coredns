@@ -115,6 +115,7 @@ func (f *Federation) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.
 			fmt.Printf("Checking Upstream Error: %v\n", err)
 		}
 		if err == nil && aRecord != nil && len(aRecord.Answer) > 0 {
+			fmt.Printf("Adding %v records to answer\n", len(aRecord.Answer))
 			m.Answer = append(m.Answer, aRecord.Answer...)
 		}
 	}
