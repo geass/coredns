@@ -15,7 +15,6 @@ package federation
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/etcd/msg"
@@ -52,7 +51,8 @@ func (f *Federation) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.
 		return plugin.NextOrFailure(f.Name(), f.Next, ctx, w, r)
 	}
 
-	state := request.Request{W: w, Req: r}
+	state := request.Request{W: w, Req: r, Context: ctx}
+
 	zone := plugin.Zones(f.zones).Matches(state.Name())
 	if zone == "" {
 		return plugin.NextOrFailure(f.Name(), f.Next, ctx, w, r)
@@ -109,13 +109,10 @@ func (f *Federation) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.
 	m.Answer = []dns.RR{service.NewCNAME(state.QName(), service.Host)}
 
 	if f.Upstream != nil {
-		fmt.Printf("Checking Upstream\n")
 		aRecord, err := f.Upstream.Lookup(state, service.Host, state.QType())
 		if err != nil {
-			fmt.Printf("Checking Upstream Error: %v\n", err)
 		}
 		if err == nil && aRecord != nil && len(aRecord.Answer) > 0 {
-			fmt.Printf("Adding %v records to answer\n", len(aRecord.Answer))
 			m.Answer = append(m.Answer, aRecord.Answer...)
 		}
 	}
