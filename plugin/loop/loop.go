@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/coredns/coredns/plugin"
+	"github.com/coredns/coredns/plugin/pkg/dnsutil"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
 	"github.com/coredns/coredns/request"
 
@@ -49,7 +50,8 @@ func (l *Loop) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (
 	}
 
 	if l.seen() > 2 {
-		log.Fatalf("Forwarding loop detected in \".\" zone. Probe \"HINFO IN %s\" was seen more than twice.", l.qname)
+		zone := dnsutil.Join(dns.SplitDomainName(l.qname)[2:]...) + "."
+		log.Fatalf("Forwarding loop detected in \"%s\" zone. Probe \"HINFO IN %s\" was seen more than twice.", zone, l.qname)
 	}
 
 	return plugin.NextOrFailure(l.Name(), l.Next, ctx, w, r)
