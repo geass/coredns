@@ -50,7 +50,7 @@ func (l *Loop) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (
 	}
 
 	if l.seen() > 2 {
-		zone:= "."
+		zone := "."
 		if len(dns.SplitDomainName(l.qname)) > 2 {
 			zone = dnsutil.Join(dns.SplitDomainName(l.qname)[2:]...)
 		}
