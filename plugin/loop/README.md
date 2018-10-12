@@ -45,3 +45,36 @@ This plugin only attempts to find simple static forwarding loops at start up tim
 
 * the loop must be present at start up time.
 * the loop must occur for at least the `HINFO` query type.
+
+## Troubleshooting
+
+When CoreDNS logs contain the message `Forwarding loop detected ...`, this means that
+the `loop` detection plugin has detected an infinite forwarding loop in one of the upstream
+DNS servers.  This is a fatal error because operating with an infinite loop will consume
+memory and CPU until eventual out of memory death by the host.
+
+A forwarding loop is usually caused by:
+* Most commonly, CoreDNS forwarding requests directly to itself. e.g. to `127.0.0.1` or `127.0.0.53`
+* Less commonly, CoreDNS forwarding to an upstream server that in turn, forwards requests back to CoreDNS.
+
+To troubleshoot this problem, look in your Corefile for any `proxy` or `forward` to the zone
+in which the loop was detected.  Make sure that they are not forwarding to a local address or
+to another DNS server that is forwarding requests back to CoreDNS. If `proxy` or `forward` are
+ using a file (e.g. `/etc/resolv.conf`), make sure that file does not contain local addresses.
+
+### Troubleshooting Loops In Kubernetes Clusters
+A common cause of forwarding loops in Kubernetes clusters is an interaction with
+`systemd-resolved` on the host node.  `systemd-resolved` will, in certain configurations,
+put `127.0.0.53` as an upstream into `/etc/resolv.conf`. Kubernetes (`kubelet`) by default
+will pass this `/etc/resolv/conf` file to all Pods using the `default` dnsPolicy (this
+includes CoreDNS Pods). CoreDNS then uses this `/etc/resolv.conf` as a list of upstreams
+to proxy/forward requests to.  Since it contains a local address, CoreDNS ends up forwarding
+requests to itself.
+
+There are many ways to work around this issue, some are listed here:
+* Add the following to `kubelet`: `--resolv-conf /run/systemd/resolve/resolv.conf`.  This flag
+tells `kubelet` to pass an alternate `resolv.conf` to Pods. For `systemd-resolved`,
+`/run/systemd/resolve/resolv.conf` is typically the location of the "original" `/etc/resolv.conf`.
+* Disable `systemd-resolved` on host nodes, and restore `/etc/resolv.conf` to the original.
+* A quick and dirty fix is to edit your Corefile, replacing `proxy . /etc/resolv.conf` with
+the ip address of your upstream DNS, for example `proxy . 8.8.8.8`.
