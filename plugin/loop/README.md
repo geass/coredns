@@ -63,6 +63,9 @@ to another DNS server that is forwarding requests back to CoreDNS. If `proxy` or
  using a file (e.g. `/etc/resolv.conf`), make sure that file does not contain local addresses.
 
 ### Troubleshooting Loops In Kubernetes Clusters
+When a CoreDNS Pod deployed in Kubernetes detects a loop, the CoreDNS Pod will start to "CrashLoopBackOff".
+This is because Kubernetes will try to restart the Pod every time CoreDNS detects the loop and exits.
+
 A common cause of forwarding loops in Kubernetes clusters is an interaction with
 `systemd-resolved` on the host node.  `systemd-resolved` will, in certain configurations,
 put `127.0.0.53` as an upstream into `/etc/resolv.conf`. Kubernetes (`kubelet`) by default
