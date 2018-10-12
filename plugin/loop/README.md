@@ -6,7 +6,7 @@
 
 ## Description
 
-The *loop* plugin will send a random query to ourselves and will then keep track of how many times
+The *loop* plugin will send a random probe query to ourselves and will then keep track of how many times
 we see it. If we see it more than twice, we assume CoreDNS is looping and we halt the process.
 
 The plugin will try to send the query for up to 30 seconds. This is done to give CoreDNS enough time
@@ -36,7 +36,7 @@ forwards to it self.
 After CoreDNS has started it stops the process while logging:
 
 ~~~ txt
-plugin/loop: Forwarding loop detected in "." zone. Probe "HINFO IN 5577006791947779410.8674665223082153551." was seen more than twice.
+plugin/loop: Forwarding loop detected in "." zone. Exiting. See https://coredns.io/plugins/loop#troubleshooting. Probe query: "HINFO 5577006791947779410.8674665223082153551.".
 ~~~
 
 ## Limitations
