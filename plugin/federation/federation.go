@@ -110,8 +110,6 @@ func (f *Federation) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.
 
 	if f.Upstream != nil {
 		aRecord, err := f.Upstream.Lookup(state, service.Host, state.QType())
-		if err != nil {
-		}
 		if err == nil && aRecord != nil && len(aRecord.Answer) > 0 {
 			m.Answer = append(m.Answer, aRecord.Answer...)
 		}
