@@ -5,8 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/coredns/coredns/plugin/kubernetes/object"
 	"github.com/coredns/coredns/plugin/pkg/dnstest"
+	k8spkg "github.com/coredns/coredns/plugin/pkg/kubernetes"
+	"github.com/coredns/coredns/plugin/pkg/kubernetes/object"
 	"github.com/coredns/coredns/plugin/test"
 
 	"github.com/miekg/dns"
@@ -219,10 +220,10 @@ func TestEndpointsEquivalent(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		if tc.equiv && !endpointsEquivalent(tc.a, tc.b) {
+		if tc.equiv && !k8spkg.EndpointsEquivalent(tc.a, tc.b) {
 			t.Errorf("Test %d: expected endpoints to be equivalent and they are not.", i)
 		}
-		if !tc.equiv && endpointsEquivalent(tc.a, tc.b) {
+		if !tc.equiv && k8spkg.EndpointsEquivalent(tc.a, tc.b) {
 			t.Errorf("Test %d: expected endpoints to be seen as different but they were not.", i)
 		}
 	}

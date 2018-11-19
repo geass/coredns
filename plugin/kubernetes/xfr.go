@@ -8,6 +8,7 @@ import (
 
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/etcd/msg"
+	k8spkg "github.com/coredns/coredns/plugin/pkg/kubernetes"
 	"github.com/coredns/coredns/request"
 
 	"github.com/miekg/dns"
@@ -105,7 +106,7 @@ func (k *Kubernetes) transfer(c chan dns.RR, zone string) {
 		if !k.namespaceExposed(svc.Namespace) {
 			continue
 		}
-		svcBase := []string{zonePath, Svc, svc.Namespace, svc.Name}
+		svcBase := []string{zonePath, k8spkg.Svc, svc.Namespace, svc.Name}
 		switch svc.Type {
 		case api.ServiceTypeClusterIP, api.ServiceTypeNodePort, api.ServiceTypeLoadBalancer:
 			clusterIP := net.ParseIP(svc.ClusterIP)
@@ -154,7 +155,7 @@ func (k *Kubernetes) transfer(c chan dns.RR, zone string) {
 						// so disregard the return value here
 						emitAddressRecord(c, s)
 
-						s.Key = strings.Join(append(svcBase, endpointHostname(addr, k.endpointNameMode)), "/")
+						s.Key = strings.Join(append(svcBase, k8spkg.EndpointHostname(addr, k.endpointNameMode)), "/")
 						// Change host from IP to Name for SRV records
 						host := emitAddressRecord(c, s)
 						s.Host = host

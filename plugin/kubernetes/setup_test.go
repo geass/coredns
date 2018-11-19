@@ -483,14 +483,14 @@ kubernetes cluster.local`,
 		}
 
 		//    ResyncPeriod
-		foundResyncPeriod := k8sController.opts.resyncPeriod
+		foundResyncPeriod := k8sController.opts.ResyncPeriod
 		if foundResyncPeriod != test.expectedResyncPeriod {
 			t.Errorf("Test %d: Expected kubernetes controller to be initialized with resync period '%s'. Instead found period '%s' for input '%s'", i, test.expectedResyncPeriod, foundResyncPeriod, test.input)
 		}
 
 		//    Labels
-		if k8sController.opts.labelSelector != nil {
-			foundLabelSelectorString := meta.FormatLabelSelector(k8sController.opts.labelSelector)
+		if k8sController.opts.LabelSelector != nil {
+			foundLabelSelectorString := meta.FormatLabelSelector(k8sController.opts.LabelSelector)
 			if foundLabelSelectorString != test.expectedLabelSelector {
 				t.Errorf("Test %d: Expected kubernetes controller to be initialized with label selector '%s'. Instead found selector '%s' for input '%s'", i, test.expectedLabelSelector, foundLabelSelectorString, test.input)
 			}
@@ -651,7 +651,7 @@ func TestKubernetesParseNoEndpoints(t *testing.T) {
 			continue
 		}
 
-		foundEndpointsInit := k8sController.opts.initEndpointsCache
+		foundEndpointsInit := k8sController.opts.InitEndpointsCache
 		if foundEndpointsInit != test.expectedEndpointsInit {
 			t.Errorf("Test %d: Expected kubernetes controller to be initialized with endpoints watch '%v'. Instead found endpoints watch '%v' for input '%s'", i, test.expectedEndpointsInit, foundEndpointsInit, test.input)
 		}
@@ -721,7 +721,7 @@ func TestKubernetesParseIgnoreEmptyService(t *testing.T) {
 			continue
 		}
 
-		foundIgnoreEmptyService := k8sController.opts.ignoreEmptyService
+		foundIgnoreEmptyService := k8sController.opts.IgnoreEmptyService
 		if foundIgnoreEmptyService != test.expectedEndpointsInit {
 			t.Errorf("Test %d: Expected kubernetes controller to be initialized with ignore empty_service '%v'. Instead found ignore empty_service watch '%v' for input '%s'", i, test.expectedEndpointsInit, foundIgnoreEmptyService, test.input)
 		}

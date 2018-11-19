@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/coredns/coredns/plugin/kubernetes/object"
+	"github.com/coredns/coredns/plugin/pkg/kubernetes/object"
 	dnswatch "github.com/coredns/coredns/plugin/pkg/watch"
 
 	api "k8s.io/api/core/v1"
@@ -27,7 +27,7 @@ const (
 	epIPIndex             = "EndpointsIP"
 )
 
-type dnsController interface {
+type DNSController interface {
 	ServiceList() []*object.Service
 	EndpointsList() []*object.Endpoints
 	SvcIndex(string) []*object.Service
@@ -52,7 +52,7 @@ type dnsController interface {
 	StopWatching(string)
 }
 
-type dnsControl struct {
+type DNSControl struct {
 	// Modified tracks timestamp of the most recent changes
 	// It needs to be first because it is guarnteed to be 8-byte
 	// aligned ( we use sync.LoadAtomic with this )
@@ -86,28 +86,28 @@ type dnsControl struct {
 	endpointNameMode bool
 }
 
-type dnsControlOpts struct {
-	initPodCache       bool
-	initEndpointsCache bool
-	resyncPeriod       time.Duration
-	ignoreEmptyService bool
+type DNSControlOpts struct {
+	InitPodCache       bool
+	InitEndpointsCache bool
+	ResyncPeriod       time.Duration
+	IgnoreEmptyService bool
 	// Label handling.
-	labelSelector *meta.LabelSelector
-	selector      labels.Selector
+	LabelSelector *meta.LabelSelector
+	Selector      labels.Selector
 
-	zones            []string
-	endpointNameMode bool
+	Zones            []string
+	EndpointNameMode bool
 }
 
 // newDNSController creates a controller for CoreDNS.
-func newdnsController(kubeClient kubernetes.Interface, opts dnsControlOpts) *dnsControl {
-	dns := dnsControl{
+func NewDNSController(kubeClient kubernetes.Interface, opts DNSControlOpts) *DNSControl {
+	dns := DNSControl{
 		client:           kubeClient,
-		selector:         opts.selector,
+		selector:         opts.Selector,
 		stopCh:           make(chan struct{}),
 		watched:          make(map[string]struct{}),
-		zones:            opts.zones,
-		endpointNameMode: opts.endpointNameMode,
+		zones:            opts.Zones,
+		endpointNameMode: opts.EndpointNameMode,
 	}
 
 	dns.svcLister, dns.svcController = object.NewIndexerInformer(
@@ -116,34 +116,34 @@ func newdnsController(kubeClient kubernetes.Interface, opts dnsControlOpts) *dns
 			WatchFunc: serviceWatchFunc(dns.client, api.NamespaceAll, dns.selector),
 		},
 		&api.Service{},
-		opts.resyncPeriod,
+		opts.ResyncPeriod,
 		cache.ResourceEventHandlerFuncs{AddFunc: dns.Add, UpdateFunc: dns.Update, DeleteFunc: dns.Delete},
 		cache.Indexers{svcNameNamespaceIndex: svcNameNamespaceIndexFunc, svcIPIndex: svcIPIndexFunc},
 		object.ToService,
 	)
 
-	if opts.initPodCache {
+	if opts.InitPodCache {
 		dns.podLister, dns.podController = object.NewIndexerInformer(
 			&cache.ListWatch{
 				ListFunc:  podListFunc(dns.client, api.NamespaceAll, dns.selector),
 				WatchFunc: podWatchFunc(dns.client, api.NamespaceAll, dns.selector),
 			},
 			&api.Pod{},
-			opts.resyncPeriod,
+			opts.ResyncPeriod,
 			cache.ResourceEventHandlerFuncs{AddFunc: dns.Add, UpdateFunc: dns.Update, DeleteFunc: dns.Delete},
 			cache.Indexers{podIPIndex: podIPIndexFunc},
 			object.ToPod,
 		)
 	}
 
-	if opts.initEndpointsCache {
+	if opts.InitEndpointsCache {
 		dns.epLister, dns.epController = object.NewIndexerInformer(
 			&cache.ListWatch{
 				ListFunc:  endpointsListFunc(dns.client, api.NamespaceAll, dns.selector),
 				WatchFunc: endpointsWatchFunc(dns.client, api.NamespaceAll, dns.selector),
 			},
 			&api.Endpoints{},
-			opts.resyncPeriod,
+			opts.ResyncPeriod,
 			cache.ResourceEventHandlerFuncs{AddFunc: dns.Add, UpdateFunc: dns.Update, DeleteFunc: dns.Delete},
 			cache.Indexers{epNameNamespaceIndex: epNameNamespaceIndexFunc, epIPIndex: epIPIndexFunc},
 			object.ToEndpoints)
@@ -154,7 +154,7 @@ func newdnsController(kubeClient kubernetes.Interface, opts dnsControlOpts) *dns
 			ListFunc:  namespaceListFunc(dns.client, dns.selector),
 			WatchFunc: namespaceWatchFunc(dns.client, dns.selector),
 		},
-		&api.Namespace{}, opts.resyncPeriod, cache.ResourceEventHandlerFuncs{})
+		&api.Namespace{}, opts.ResyncPeriod, cache.ResourceEventHandlerFuncs{})
 
 	return &dns
 }
@@ -279,10 +279,10 @@ func namespaceWatchFunc(c kubernetes.Interface, s labels.Selector) func(options 
 	}
 }
 
-func (dns *dnsControl) SetWatchChan(c dnswatch.Chan) { dns.watchChan = c }
-func (dns *dnsControl) StopWatching(qname string)    { delete(dns.watched, qname) }
+func (dns *DNSControl) SetWatchChan(c dnswatch.Chan) { dns.watchChan = c }
+func (dns *DNSControl) StopWatching(qname string)    { delete(dns.watched, qname) }
 
-func (dns *dnsControl) Watch(qname string) error {
+func (dns *DNSControl) Watch(qname string) error {
 	if dns.watchChan == nil {
 		return fmt.Errorf("cannot start watch because the channel has not been set")
 	}
@@ -291,7 +291,7 @@ func (dns *dnsControl) Watch(qname string) error {
 }
 
 // Stop stops the  controller.
-func (dns *dnsControl) Stop() error {
+func (dns *DNSControl) Stop() error {
 	dns.stopLock.Lock()
 	defer dns.stopLock.Unlock()
 
@@ -307,7 +307,7 @@ func (dns *dnsControl) Stop() error {
 }
 
 // Run starts the controller.
-func (dns *dnsControl) Run() {
+func (dns *DNSControl) Run() {
 	go dns.svcController.Run(dns.stopCh)
 	if dns.epController != nil {
 		go dns.epController.Run(dns.stopCh)
@@ -320,7 +320,7 @@ func (dns *dnsControl) Run() {
 }
 
 // HasSynced calls on all controllers.
-func (dns *dnsControl) HasSynced() bool {
+func (dns *DNSControl) HasSynced() bool {
 	a := dns.svcController.HasSynced()
 	b := true
 	if dns.epController != nil {
@@ -334,7 +334,7 @@ func (dns *dnsControl) HasSynced() bool {
 	return a && b && c && d
 }
 
-func (dns *dnsControl) ServiceList() (svcs []*object.Service) {
+func (dns *DNSControl) ServiceList() (svcs []*object.Service) {
 	os := dns.svcLister.List()
 	for _, o := range os {
 		s, ok := o.(*object.Service)
@@ -346,7 +346,7 @@ func (dns *dnsControl) ServiceList() (svcs []*object.Service) {
 	return svcs
 }
 
-func (dns *dnsControl) EndpointsList() (eps []*object.Endpoints) {
+func (dns *DNSControl) EndpointsList() (eps []*object.Endpoints) {
 	os := dns.epLister.List()
 	for _, o := range os {
 		ep, ok := o.(*object.Endpoints)
@@ -358,7 +358,7 @@ func (dns *dnsControl) EndpointsList() (eps []*object.Endpoints) {
 	return eps
 }
 
-func (dns *dnsControl) PodIndex(ip string) (pods []*object.Pod) {
+func (dns *DNSControl) PodIndex(ip string) (pods []*object.Pod) {
 	os, err := dns.podLister.ByIndex(podIPIndex, ip)
 	if err != nil {
 		return nil
@@ -373,7 +373,7 @@ func (dns *dnsControl) PodIndex(ip string) (pods []*object.Pod) {
 	return pods
 }
 
-func (dns *dnsControl) SvcIndex(idx string) (svcs []*object.Service) {
+func (dns *DNSControl) SvcIndex(idx string) (svcs []*object.Service) {
 	os, err := dns.svcLister.ByIndex(svcNameNamespaceIndex, idx)
 	if err != nil {
 		return nil
@@ -388,7 +388,7 @@ func (dns *dnsControl) SvcIndex(idx string) (svcs []*object.Service) {
 	return svcs
 }
 
-func (dns *dnsControl) SvcIndexReverse(ip string) (svcs []*object.Service) {
+func (dns *DNSControl) SvcIndexReverse(ip string) (svcs []*object.Service) {
 	os, err := dns.svcLister.ByIndex(svcIPIndex, ip)
 	if err != nil {
 		return nil
@@ -404,7 +404,7 @@ func (dns *dnsControl) SvcIndexReverse(ip string) (svcs []*object.Service) {
 	return svcs
 }
 
-func (dns *dnsControl) EpIndex(idx string) (ep []*object.Endpoints) {
+func (dns *DNSControl) EpIndex(idx string) (ep []*object.Endpoints) {
 	os, err := dns.epLister.ByIndex(epNameNamespaceIndex, idx)
 	if err != nil {
 		return nil
@@ -419,7 +419,7 @@ func (dns *dnsControl) EpIndex(idx string) (ep []*object.Endpoints) {
 	return ep
 }
 
-func (dns *dnsControl) EpIndexReverse(ip string) (ep []*object.Endpoints) {
+func (dns *DNSControl) EpIndexReverse(ip string) (ep []*object.Endpoints) {
 	os, err := dns.epLister.ByIndex(epIPIndex, ip)
 	if err != nil {
 		return nil
@@ -437,13 +437,13 @@ func (dns *dnsControl) EpIndexReverse(ip string) (ep []*object.Endpoints) {
 // GetNodeByName return the node by name. If nothing is found an error is
 // returned. This query causes a roundtrip to the k8s API server, so use
 // sparingly. Currently this is only used for Federation.
-func (dns *dnsControl) GetNodeByName(name string) (*api.Node, error) {
+func (dns *DNSControl) GetNodeByName(name string) (*api.Node, error) {
 	v1node, err := dns.client.CoreV1().Nodes().Get(name, meta.GetOptions{})
 	return v1node, err
 }
 
 // GetNamespaceByName returns the namespace by name. If nothing is found an error is returned.
-func (dns *dnsControl) GetNamespaceByName(name string) (*api.Namespace, error) {
+func (dns *DNSControl) GetNamespaceByName(name string) (*api.Namespace, error) {
 	os := dns.nsLister.List()
 	for _, o := range os {
 		ns, ok := o.(*api.Namespace)
@@ -457,13 +457,13 @@ func (dns *dnsControl) GetNamespaceByName(name string) (*api.Namespace, error) {
 	return nil, fmt.Errorf("namespace not found")
 }
 
-func (dns *dnsControl) Modified() int64 {
+func (dns *DNSControl) Modified() int64 {
 	unix := atomic.LoadInt64(&dns.modified)
 	return unix
 }
 
 // updateModified set dns.modified to the current time.
-func (dns *dnsControl) updateModifed() {
+func (dns *DNSControl) updateModifed() {
 	unix := time.Now().Unix()
 	atomic.StoreInt64(&dns.modified, unix)
 }

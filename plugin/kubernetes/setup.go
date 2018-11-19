@@ -13,6 +13,7 @@ import (
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/pkg/dnsutil"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
+	k8spkg "github.com/coredns/coredns/plugin/pkg/kubernetes"
 	"github.com/coredns/coredns/plugin/pkg/parse"
 	"github.com/coredns/coredns/plugin/pkg/upstream"
 
@@ -128,10 +129,10 @@ func ParseStanza(c *caddy.Controller) (*Kubernetes, error) {
 	k8s.interfaceAddrsFunc = localPodIP
 	k8s.autoPathSearch = searchFromResolvConf()
 
-	opts := dnsControlOpts{
-		initEndpointsCache: true,
-		ignoreEmptyService: false,
-		resyncPeriod:       defaultResyncPeriod,
+	opts := k8spkg.DNSControlOpts{
+		InitEndpointsCache: true,
+		IgnoreEmptyService: false,
+		ResyncPeriod:       defaultResyncPeriod,
 	}
 	k8s.opts = opts
 
@@ -213,7 +214,7 @@ func ParseStanza(c *caddy.Controller) (*Kubernetes, error) {
 				if err != nil {
 					return nil, fmt.Errorf("unable to parse resync duration value: '%v': %v", args[0], err)
 				}
-				k8s.opts.resyncPeriod = rp
+				k8s.opts.ResyncPeriod = rp
 				continue
 			}
 			return nil, c.ArgErr()
@@ -225,7 +226,7 @@ func ParseStanza(c *caddy.Controller) (*Kubernetes, error) {
 				if err != nil {
 					return nil, fmt.Errorf("unable to parse label selector value: '%v': %v", labelSelectorString, err)
 				}
-				k8s.opts.labelSelector = ls
+				k8s.opts.LabelSelector = ls
 				continue
 			}
 			return nil, c.ArgErr()
@@ -264,13 +265,13 @@ func ParseStanza(c *caddy.Controller) (*Kubernetes, error) {
 			if len(c.RemainingArgs()) != 0 {
 				return nil, c.ArgErr()
 			}
-			k8s.opts.initEndpointsCache = false
+			k8s.opts.InitEndpointsCache = false
 		case "ignore":
 			args := c.RemainingArgs()
 			if len(args) > 0 {
 				ignore := args[0]
 				if ignore == "empty_service" {
-					k8s.opts.ignoreEmptyService = true
+					k8s.opts.IgnoreEmptyService = true
 					continue
 				} else {
 					return nil, fmt.Errorf("unable to parse ignore value: '%v'", ignore)

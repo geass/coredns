@@ -6,6 +6,7 @@ import (
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/etcd/msg"
 	"github.com/coredns/coredns/plugin/pkg/dnsutil"
+	k8spkg "github.com/coredns/coredns/plugin/pkg/kubernetes"
 	"github.com/coredns/coredns/request"
 )
 
@@ -33,7 +34,7 @@ func (k *Kubernetes) serviceRecordForIP(ip, name string) []msg.Service {
 		if len(k.Namespaces) > 0 && !k.namespaceExposed(service.Namespace) {
 			continue
 		}
-		domain := strings.Join([]string{service.Name, service.Namespace, Svc, k.primaryZone()}, ".")
+		domain := strings.Join([]string{service.Name, service.Namespace, k8spkg.Svc, k.primaryZone()}, ".")
 		return []msg.Service{{Host: domain, TTL: k.ttl}}
 	}
 	// If no cluster ips match, search endpoints
@@ -44,7 +45,7 @@ func (k *Kubernetes) serviceRecordForIP(ip, name string) []msg.Service {
 		for _, eps := range ep.Subsets {
 			for _, addr := range eps.Addresses {
 				if addr.IP == ip {
-					domain := strings.Join([]string{endpointHostname(addr, k.endpointNameMode), ep.Name, ep.Namespace, Svc, k.primaryZone()}, ".")
+					domain := strings.Join([]string{k8spkg.EndpointHostname(addr, k.endpointNameMode), ep.Name, ep.Namespace, k8spkg.Svc, k.primaryZone()}, ".")
 					return []msg.Service{{Host: domain, TTL: k.ttl}}
 				}
 			}

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/coredns/coredns/plugin/kubernetes/object"
+	"github.com/coredns/coredns/plugin/pkg/kubernetes/object"
 )
 
 func endpointSubsets(addrs ...string) (eps []object.EndpointSubset) {
@@ -46,7 +46,7 @@ func TestEndpointsSubsetDiffs(t *testing.T) {
 
 	for i, te := range tests {
 		got := endpointsSubsetDiffs(&te.a, &te.b)
-		if !endpointsEquivalent(got, &te.expected) {
+		if !EndpointsEquivalent(got, &te.expected) {
 			t.Errorf("Expected '%v' for test %v, got '%v'.", te.expected, i, got)
 		}
 	}

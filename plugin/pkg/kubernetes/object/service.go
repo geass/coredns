@@ -12,6 +12,7 @@ type Service struct {
 	Namespace    string
 	Index        string
 	ClusterIP    string
+	ExternalIPs  []string
 	Type         api.ServiceType
 	ExternalName string
 	Ports        []api.ServicePort
@@ -35,6 +36,7 @@ func ToService(obj interface{}) interface{} {
 		Namespace:    svc.GetNamespace(),
 		Index:        ServiceKey(svc.GetName(), svc.GetNamespace()),
 		ClusterIP:    svc.Spec.ClusterIP,
+		ExternalIPs:  svc.Spec.ExternalIPs,
 		Type:         svc.Spec.Type,
 		ExternalName: svc.Spec.ExternalName,
 	}
@@ -62,11 +64,13 @@ func (s *Service) DeepCopyObject() runtime.Object {
 		Namespace:    s.Namespace,
 		Index:        s.Index,
 		ClusterIP:    s.ClusterIP,
+		ExternalIPs:  make([]string, len(s.ExternalIPs)),
 		Type:         s.Type,
 		ExternalName: s.ExternalName,
 		Ports:        make([]api.ServicePort, len(s.Ports)),
 	}
 	copy(s1.Ports, s.Ports)
+	copy(s1.ExternalIPs, s.ExternalIPs)
 	return s1
 }
 

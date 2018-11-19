@@ -25,7 +25,7 @@ func TestServeDNSEmptyService(t *testing.T) {
 
 	k := New([]string{"cluster.local."})
 	k.APIConn = &APIConnServeTest{}
-	k.opts.ignoreEmptyService = true
+	k.opts.IgnoreEmptyService = true
 	k.Next = test.NextHandler(dns.RcodeSuccess, nil)
 	ctx := context.TODO()
 

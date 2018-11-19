@@ -11,10 +11,11 @@ import (
 
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/etcd/msg"
-	"github.com/coredns/coredns/plugin/kubernetes/object"
 	"github.com/coredns/coredns/plugin/pkg/dnsutil"
 	"github.com/coredns/coredns/plugin/pkg/fall"
 	"github.com/coredns/coredns/plugin/pkg/healthcheck"
+	k8spkg "github.com/coredns/coredns/plugin/pkg/kubernetes"
+	"github.com/coredns/coredns/plugin/pkg/kubernetes/object"
 	"github.com/coredns/coredns/plugin/pkg/upstream"
 	"github.com/coredns/coredns/request"
 
@@ -39,13 +40,13 @@ type Kubernetes struct {
 	APIClientCert    string
 	APIClientKey     string
 	ClientConfig     clientcmd.ClientConfig
-	APIConn          dnsController
+	APIConn          k8spkg.DNSController
 	Namespaces       map[string]bool
 	podMode          string
 	endpointNameMode bool
 	Fall             fall.F
 	ttl              uint32
-	opts             dnsControlOpts
+	opts             k8spkg.DNSControlOpts
 
 	primaryZoneIndex   int
 	interfaceAddrsFunc func() net.IP
@@ -75,10 +76,6 @@ const (
 	podModeInsecure = "insecure"
 	// DNSSchemaVersion is the schema version: https://github.com/kubernetes/dns/blob/master/docs/specification.md
 	DNSSchemaVersion = "1.0.1"
-	// Svc is the DNS schema for kubernetes services
-	Svc = "svc"
-	// Pod is the DNS schema for kubernetes pods
-	Pod = "pod"
 	// defaultTTL to apply to all answers.
 	defaultTTL = 5
 )
@@ -254,20 +251,20 @@ func (k *Kubernetes) InitKubeCache() (err error) {
 		return fmt.Errorf("failed to create kubernetes notification controller: %q", err)
 	}
 
-	if k.opts.labelSelector != nil {
+	if k.opts.LabelSelector != nil {
 		var selector labels.Selector
-		selector, err = meta.LabelSelectorAsSelector(k.opts.labelSelector)
+		selector, err = meta.LabelSelectorAsSelector(k.opts.LabelSelector)
 		if err != nil {
-			return fmt.Errorf("unable to create Selector for LabelSelector '%s': %q", k.opts.labelSelector, err)
+			return fmt.Errorf("unable to create Selector for LabelSelector '%s': %q", k.opts.LabelSelector, err)
 		}
-		k.opts.selector = selector
+		k.opts.Selector = selector
 	}
 
-	k.opts.initPodCache = k.podMode == podModeVerified
+	k.opts.InitPodCache = k.podMode == podModeVerified
 
-	k.opts.zones = k.Zones
-	k.opts.endpointNameMode = k.endpointNameMode
-	k.APIConn = newdnsController(kubeClient, k.opts)
+	k.opts.Zones = k.Zones
+	k.opts.EndpointNameMode = k.endpointNameMode
+	k.APIConn = k8spkg.NewDNSController(kubeClient, k.opts)
 
 	return err
 }
@@ -290,7 +287,7 @@ func (k *Kubernetes) Records(state request.Request, exact bool) ([]msg.Service, 
 		return nil, errNsNotExposed
 	}
 
-	if r.podOrSvc == Pod {
+	if r.podOrSvc == k8spkg.Pod {
 		pods, err := k.findPods(r, state.Zone)
 		return pods, err
 	}
@@ -299,48 +296,6 @@ func (k *Kubernetes) Records(state request.Request, exact bool) ([]msg.Service, 
 	return services, err
 }
 
-// serviceFQDN returns the k8s cluster dns spec service FQDN for the service (or endpoint) object.
-func serviceFQDN(obj meta.Object, zone string) string {
-	return dnsutil.Join(obj.GetName(), obj.GetNamespace(), Svc, zone)
-}
-
-// podFQDN returns the k8s cluster dns spec FQDN for the pod.
-func podFQDN(p *object.Pod, zone string) string {
-	if strings.Contains(p.PodIP, ".") {
-		name := strings.Replace(p.PodIP, ".", "-", -1)
-		return dnsutil.Join(name, p.GetNamespace(), Pod, zone)
-	}
-
-	name := strings.Replace(p.PodIP, ":", "-", -1)
-	return dnsutil.Join(name, p.GetNamespace(), Pod, zone)
-}
-
-// endpointFQDN returns a list of k8s cluster dns spec service FQDNs for each subset in the endpoint.
-func endpointFQDN(ep *object.Endpoints, zone string, endpointNameMode bool) []string {
-	var names []string
-	for _, ss := range ep.Subsets {
-		for _, addr := range ss.Addresses {
-			names = append(names, dnsutil.Join(endpointHostname(addr, endpointNameMode), serviceFQDN(ep, zone)))
-		}
-	}
-	return names
-}
-
-func endpointHostname(addr object.EndpointAddress, endpointNameMode bool) string {
-	if addr.Hostname != "" {
-		return addr.Hostname
-	}
-	if endpointNameMode && addr.TargetRefName != "" {
-		return addr.TargetRefName
-	}
-	if strings.Contains(addr.IP, ".") {
-		return strings.Replace(addr.IP, ".", "-", -1)
-	}
-	if strings.Contains(addr.IP, ":") {
-		return strings.Replace(addr.IP, ":", "-", -1)
-	}
-	return ""
-}
 
 func (k *Kubernetes) findPods(r recordRequest, zone string) (pods []msg.Service, err error) {
 	if k.podMode == podModeDisabled {
@@ -378,7 +333,7 @@ func (k *Kubernetes) findPods(r recordRequest, zone string) (pods []msg.Service,
 			return nil, errNoItems
 		}
 
-		return []msg.Service{{Key: strings.Join([]string{zonePath, Pod, namespace, podname}, "/"), Host: ip, TTL: k.ttl}}, err
+		return []msg.Service{{Key: strings.Join([]string{zonePath, k8spkg.Pod, namespace, podname}, "/"), Host: ip, TTL: k.ttl}}, err
 	}
 
 	// PodModeVerified
@@ -403,7 +358,7 @@ func (k *Kubernetes) findPods(r recordRequest, zone string) (pods []msg.Service,
 
 		// check for matching ip and namespace
 		if ip == p.PodIP && match(namespace, p.Namespace) {
-			s := msg.Service{Key: strings.Join([]string{zonePath, Pod, namespace, podname}, "/"), Host: ip, TTL: k.ttl}
+			s := msg.Service{Key: strings.Join([]string{zonePath, k8spkg.Pod, namespace, podname}, "/"), Host: ip, TTL: k.ttl}
 			pods = append(pods, s)
 
 			err = nil
@@ -460,7 +415,7 @@ func (k *Kubernetes) findServices(r recordRequest, zone string) (services []msg.
 			continue
 		}
 
-		if k.opts.ignoreEmptyService && svc.ClusterIP != api.ClusterIPNone {
+		if k.opts.IgnoreEmptyService && svc.ClusterIP != api.ClusterIPNone {
 			// serve NXDOMAIN if no endpoint is able to answer
 			podsCount := 0
 			for _, ep := range endpointsListFunc() {
@@ -489,7 +444,7 @@ func (k *Kubernetes) findServices(r recordRequest, zone string) (services []msg.
 
 						// See comments in parse.go parseRequest about the endpoint handling.
 						if r.endpoint != "" {
-							if !match(r.endpoint, endpointHostname(addr, k.endpointNameMode)) {
+							if !match(r.endpoint, k8spkg.EndpointHostname(addr, k.endpointNameMode)) {
 								continue
 							}
 						}
@@ -499,7 +454,7 @@ func (k *Kubernetes) findServices(r recordRequest, zone string) (services []msg.
 								continue
 							}
 							s := msg.Service{Host: addr.IP, Port: int(p.Port), TTL: k.ttl}
-							s.Key = strings.Join([]string{zonePath, Svc, svc.Namespace, svc.Name, endpointHostname(addr, k.endpointNameMode)}, "/")
+							s.Key = strings.Join([]string{zonePath, k8spkg.Svc, svc.Namespace, svc.Name, k8spkg.EndpointHostname(addr, k.endpointNameMode)}, "/")
 
 							err = nil
 
@@ -513,9 +468,9 @@ func (k *Kubernetes) findServices(r recordRequest, zone string) (services []msg.
 
 		// External service
 		if svc.Type == api.ServiceTypeExternalName {
-			s := msg.Service{Key: strings.Join([]string{zonePath, Svc, svc.Namespace, svc.Name}, "/"), Host: svc.ExternalName, TTL: k.ttl}
+			s := msg.Service{Key: strings.Join([]string{zonePath, k8spkg.Svc, svc.Namespace, svc.Name}, "/"), Host: svc.ExternalName, TTL: k.ttl}
 			if t, _ := s.HostType(); t == dns.TypeCNAME {
-				s.Key = strings.Join([]string{zonePath, Svc, svc.Namespace, svc.Name}, "/")
+				s.Key = strings.Join([]string{zonePath, k8spkg.Svc, svc.Namespace, svc.Name}, "/")
 				services = append(services, s)
 
 				err = nil
@@ -532,7 +487,7 @@ func (k *Kubernetes) findServices(r recordRequest, zone string) (services []msg.
 			err = nil
 
 			s := msg.Service{Host: svc.ClusterIP, Port: int(p.Port), TTL: k.ttl}
-			s.Key = strings.Join([]string{zonePath, Svc, svc.Namespace, svc.Name}, "/")
+			s.Key = strings.Join([]string{zonePath, k8spkg.Svc, svc.Namespace, svc.Name}, "/")
 
 			services = append(services, s)
 		}

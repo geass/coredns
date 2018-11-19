@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"github.com/coredns/coredns/plugin/pkg/dnsutil"
+	k8spkg "github.com/coredns/coredns/plugin/pkg/kubernetes"
 	"github.com/coredns/coredns/request"
 
 	"github.com/miekg/dns"
@@ -36,7 +37,7 @@ func parseRequest(state request.Request) (r recordRequest, err error) {
 
 	base, _ := dnsutil.TrimZone(state.Name(), state.Zone)
 	// return NODATA for apex queries
-	if base == "" || base == Svc || base == Pod {
+	if base == "" || base == k8spkg.Svc || base == k8spkg.Pod {
 		return r, nil
 	}
 	segs := dns.SplitDomainName(base)
@@ -58,7 +59,7 @@ func parseRequest(state request.Request) (r recordRequest, err error) {
 		return r, nil
 	}
 	r.podOrSvc = segs[last]
-	if r.podOrSvc != Pod && r.podOrSvc != Svc {
+	if r.podOrSvc != k8spkg.Pod && r.podOrSvc != k8spkg.Svc {
 		return r, errInvalidRequest
 	}
 	last--

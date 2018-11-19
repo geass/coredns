@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"testing"
 
+	k8spkg "github.com/coredns/coredns/plugin/pkg/kubernetes"
 	"github.com/coredns/coredns/plugin/test"
 
 	"github.com/miekg/dns"
@@ -26,10 +27,10 @@ func inc(ip net.IP) {
 
 func BenchmarkController(b *testing.B) {
 	client := fake.NewSimpleClientset()
-	dco := dnsControlOpts{
-		zones: []string{"cluster.local."},
+	dco := k8spkg.DNSControlOpts{
+		Zones: []string{"cluster.local."},
 	}
-	controller := newdnsController(client, dco)
+	controller := k8spkg.NewDNSController(client, dco)
 	cidr := "10.0.0.0/19"
 
 	// Add resources

@@ -2,7 +2,7 @@ package kubernetes
 
 import (
 	"github.com/coredns/coredns/plugin"
-	"github.com/coredns/coredns/plugin/kubernetes/object"
+	"github.com/coredns/coredns/plugin/pkg/kubernetes/object"
 	"github.com/coredns/coredns/request"
 )
 
@@ -22,7 +22,7 @@ func (k *Kubernetes) AutoPath(state request.Request) []string {
 	//    }
 	// }
 	// if pods != verified will cause panic and return SERVFAIL, expect worked as normal without autopath function
-	if !k.opts.initPodCache {
+	if !k.opts.InitPodCache {
 		return nil
 	}
 
