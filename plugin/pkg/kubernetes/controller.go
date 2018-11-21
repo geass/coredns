@@ -95,8 +95,9 @@ type DNSControlOpts struct {
 	LabelSelector *meta.LabelSelector
 	Selector      labels.Selector
 
-	Zones            []string
-	EndpointNameMode bool
+	Zones             []string
+	EndpointNameMode  bool
+	ExposeExternalIPs bool
 }
 
 // newDNSController creates a controller for CoreDNS.
@@ -110,6 +111,10 @@ func NewDNSController(kubeClient kubernetes.Interface, opts DNSControlOpts) *DNS
 		endpointNameMode: opts.EndpointNameMode,
 	}
 
+	svcIPIndexer := svcClusterIPIndexFunc
+	if opts.ExposeExternalIPs {
+		svcIPIndexer = svcExternalIPsIndexFunc
+	}
 	dns.svcLister, dns.svcController = object.NewIndexerInformer(
 		&cache.ListWatch{
 			ListFunc:  serviceListFunc(dns.client, api.NamespaceAll, dns.selector),
@@ -118,7 +123,7 @@ func NewDNSController(kubeClient kubernetes.Interface, opts DNSControlOpts) *DNS
 		&api.Service{},
 		opts.ResyncPeriod,
 		cache.ResourceEventHandlerFuncs{AddFunc: dns.Add, UpdateFunc: dns.Update, DeleteFunc: dns.Delete},
-		cache.Indexers{svcNameNamespaceIndex: svcNameNamespaceIndexFunc, svcIPIndex: svcIPIndexFunc},
+		cache.Indexers{svcNameNamespaceIndex: svcNameNamespaceIndexFunc, svcIPIndex: svcIPIndexer},
 		object.ToService,
 	)
 
@@ -167,12 +172,20 @@ func podIPIndexFunc(obj interface{}) ([]string, error) {
 	return []string{p.PodIP}, nil
 }
 
-func svcIPIndexFunc(obj interface{}) ([]string, error) {
+func svcClusterIPIndexFunc(obj interface{}) ([]string, error) {
 	svc, ok := obj.(*object.Service)
 	if !ok {
 		return nil, errObj
 	}
 	return []string{svc.ClusterIP}, nil
+}
+
+func svcExternalIPsIndexFunc(obj interface{}) ([]string, error) {
+	svc, ok := obj.(*object.Service)
+	if !ok {
+		return nil, errObj
+	}
+	return svc.ExternalIPs, nil
 }
 
 func svcNameNamespaceIndexFunc(obj interface{}) ([]string, error) {
