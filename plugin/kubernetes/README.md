@@ -1,37 +1,50 @@
-# extkubernetes
+# kubernetes
 
 ## Name
 
-*extkubernetes* - enables the reading external zone data from a Kubernetes cluster for Load Balancer IPs.
+*kubernetes* - enables the reading zone data from a Kubernetes cluster.
 
 ## Description
 
-Creates A/AAAA, SRV, and PTR records for the External IPs of each LoadBalancer type Service in the Kubernetes cluster.
+It implements the [Kubernetes DNS-Based Service Discovery
+Specification](https://github.com/kubernetes/dns/blob/master/docs/specification.md).
 
+CoreDNS running the kubernetes plugin can be used as a replacement of kube-dns in a kubernetes
+cluster.  See the [deployment](https://github.com/coredns/deployment) repository for details on [how
+to deploy CoreDNS in Kubernetes](https://github.com/coredns/deployment/tree/master/kubernetes).
+
+[stubDomains and upstreamNameservers](http://blog.kubernetes.io/2017/04/configuring-private-dns-zones-upstream-nameservers-kubernetes.html)
+are implemented via the *proxy* plugin and kubernetes *upstream*. See example below.
 
 This plugin can only be used once per Server Block.
 
 ## Syntax
 
 ~~~
-extkubernetes [ZONES...]
+kubernetes [ZONES...]
 ~~~
 
-With only the directive specified, the *extkubernetes* plugin will default to the zones specified in
-the server's block. It will handle all queries in those zones and connect to Kubernetes in-cluster.
-If **ZONES** is used, it specifies all the zones the plugin should be authoritative for.
+With only the directive specified, the *kubernetes* plugin will default to the zone specified in
+the server's block. It will handle all queries in that zone and connect to Kubernetes in-cluster. It
+will not provide PTR records for services, or A records for pods. If **ZONES** is used it specifies
+all the zones the plugin should be authoritative for.
 
 ```
-extkubernetes [ZONES...] {
+kubernetes [ZONES...] {
     resyncperiod DURATION
     endpoint URL [URL...]
     tls CERT KEY CACERT
     kubeconfig KUBECONFIG CONTEXT
     namespaces NAMESPACE...
     labels EXPRESSION
+    pods POD-MODE
+    endpoint_pod_names
+    upstream [ADDRESS...]
     ttl TTL
+    noendpoints
     transfer to ADDRESS...
     fallthrough [ZONES...]
+    ignore empty_service
 }
 ```
 
@@ -51,6 +64,37 @@ extkubernetes [ZONES...] {
    [Kubernetes User Guide - Labels](http://kubernetes.io/docs/user-guide/labels/). An example that
    only exposes objects labeled as "application=nginx" in the "staging" or "qa" environments, would
    use: `labels environment in (staging, qa),application=nginx`.
+* `pods` **POD-MODE** sets the mode for handling IP-based pod A records, e.g.
+   `1-2-3-4.ns.pod.cluster.local. in A 1.2.3.4`.
+   This option is provided to facilitate use of SSL certs when connecting directly to pods. Valid
+   values for **POD-MODE**:
+
+   * `disabled`: Default. Do not process pod requests, always returning `NXDOMAIN`
+   * `insecure`: Always return an A record with IP from request (without checking k8s).  This option
+     is vulnerable to abuse if used maliciously in conjunction with wildcard SSL certs.  This
+     option is provided for backward compatibility with kube-dns.
+   * `verified`: Return an A record if there exists a pod in same namespace with matching IP.  This
+     option requires substantially more memory than in insecure mode, since it will maintain a watch
+     on all pods.
+
+* `endpoint_pod_names` uses the pod name of the pod targeted by the endpoint as
+   the endpoint name in A records, e.g.
+   `endpoint-name.my-service.namespace.svc.cluster.local. in A 1.2.3.4`
+   By default, the endpoint-name name selection is as follows: Use the hostname
+   of the endpoint, or if hostname is not set, use the dashed form of the endpoint
+   IP address (e.g. `1-2-3-4.my-service.namespace.svc.cluster.local.`)
+   If this directive is included, then name selection for endpoints changes as
+   follows: Use the hostname of the endpoint, or if hostname is not set, use the
+   pod name of the pod targeted by the endpoint. If there is no pod targeted by
+   the endpoint, use the dashed IP address form.
+* `upstream` [**ADDRESS**...] defines the upstream resolvers used for resolving services
+  that point to external hosts (aka External Services aka CNAMEs).  If no **ADDRESS** is given, CoreDNS
+  will resolve External Services against itself. **ADDRESS** can be an IP, an IP:port, or a path
+  to a file structured like resolv.conf.
+* `ttl` allows you to set a custom TTL for responses. The default (and allowed minimum) is to use
+  5 seconds, the maximum is capped at 3600 seconds.
+* `noendpoints` will turn off the serving of endpoint records by disabling the watch on endpoints.
+  All endpoint queries and headless service queries will result in an NXDOMAIN.
 * `transfer` enables zone transfers. It may be specified multiples times. `To` signals the direction
   (only `to` is allow). **ADDRESS** must be denoted in CIDR notation (127.0.0.1/32 etc.) or just as
   plain addresses. The special wildcard `*` means: the entire internet.
@@ -62,37 +106,121 @@ extkubernetes [ZONES...] {
   the query. If **[ZONES...]** is omitted, then fallthrough happens for all zones for which the plugin
   is authoritative. If specific zones are listed (for example `in-addr.arpa` and `ip6.arpa`), then only
   queries for those zones will be subject to fallthrough.
+* `ignore empty_service` return NXDOMAIN for services without any ready endpoint addresses (e.g. ready pods).
+  This allows the querying pod to continue searching for the service in the search path.
+  The search path could, for example, include another kubernetes cluster.
 
 ## Health
 
 This plugin implements dynamic health checking. Currently this is limited to reporting healthy when
 the API has synced.
 
+## Watch
+
+This plugin implements watch. A client that connects to CoreDNS using `coredns/client` can be notified
+of changes to A, AAAA, and SRV records for Kubernetes services and endpoints.
+
 ## Examples
+
+Handle all queries in the `cluster.local` zone. Connect to Kubernetes in-cluster. Also handle all
+`in-addr.arpa` `PTR` requests for `10.0.0.0/17` . Verify the existence of pods when answering pod
+requests. Resolve upstream records against `10.102.3.10`. Note we show the entire server block here:
+
+~~~ txt
+10.0.0.0/17 cluster.local {
+    kubernetes {
+        pods verified
+        upstream 10.102.3.10:53
+    }
+}
+~~~
+
+Or you can selectively expose some namespaces:
+
+~~~ txt
+kubernetes cluster.local {
+    namespaces test staging
+}
+~~~
 
 Connect to Kubernetes with CoreDNS running outside the cluster:
 
 ~~~ txt
-extkubernetes myzone.com {
+kubernetes cluster.local {
     endpoint https://k8s-endpoint:8443
     tls cert key cacert
 }
 ~~~
 
-Handle all queries in the `myzone.com` zone. Connect to Kubernetes in-cluster. Also handle all
-`in-addr.arpa` `PTR` requests for `123.0.0.0/17`. Note we show the entire server block here:
+
+## stubDomains and upstreamNameservers
+
+Here we use the *proxy* plugin to implement a stubDomain that forwards `example.local` to the nameserver `10.100.0.10:53`.
+The *upstream* option in kubernetes means that ExternalName services (CNAMEs) will be resolved using the respective proxy.
+Also configured is an upstreamNameserver `8.8.8.8:53` that will be used for resolving names that do not fall in `cluster.local`
+or `example.local`.
 
 ~~~ txt
-123.0.0.0/17 myzone.com {
-    extkubernetes
+.:53 {
+    kubernetes cluster.local {
+        upstream
+    }
+    proxy example.local 10.100.0.10:53
+    proxy . 8.8.8.8:53
 }
 ~~~
 
-Or you can selectively expose namespaces.  In this case we expose the namespace "public":
+The configuration above represents the following Kube-DNS stubDomains and upstreamNameservers configuration.
 
 ~~~ txt
-extkubernetes myzone.com {
-    namespaces public
-}
+  stubDomains: |
+    {“example.local”: [“10.100.0.10:53”]}
+  upstreamNameservers: |
+    [“8.8.8.8:53”]
 ~~~
 
+## AutoPath
+
+The *kubernetes* plugin can be used in conjunction with the *autopath* plugin.  Using this
+feature enables server-side domain search path completion in kubernetes clusters.  Note: `pods` must
+be set to `verified` for this to function properly.
+
+    cluster.local {
+        autopath @kubernetes
+        kubernetes {
+            pods verified
+        }
+    }
+
+## Federation
+
+The *kubernetes* plugin can be used in conjunction with the *federation* plugin.  Using this
+feature enables serving federated domains from the kubernetes clusters.
+
+    cluster.local {
+        federation {
+            prod prod.example.org
+            staging staging.example.org
+        }
+        kubernetes
+    }
+
+
+## Wildcards
+
+Some query labels accept a wildcard value to match any value.  If a label is a valid wildcard (\*,
+or the word "any"), then that label will match all values.  The labels that accept wildcards are:
+
+ * _endpoint_ in an `A` record request: _endpoint_.service.namespace.svc.zone, e.g. `*.nginx.ns.svc.cluster.local`
+ * _service_ in an `A` record request: _service_.namespace.svc.zone, e.g. `*.ns.svc.cluster.local`
+ * _namespace_ in an `A` record request: service._namespace_.svc.zone, e.g. `nginx.*.svc.cluster.local`
+ * _port and/or protocol_ in an `SRV` request: __port_.__protocol_.service.namespace.svc.zone.,
+   e.g. `_http.*.service.ns.svc.cluster.local`
+ * multiple wild cards are allowed in a single query, e.g. `A` Request `*.*.svc.zone.` or `SRV` request `*.*.*.*.svc.zone.`
+
+ For example, Wildcards can be used to resolve all Endpoints for a Service as `A` records. e.g.: `*.service.ns.svc.myzone.local` will return the Endpoint IPs in the Service `service` in namespace `default`:
+ ```
+*.service.default.svc.cluster.local. 5	IN A	192.168.10.10
+*.service.default.svc.cluster.local. 5	IN A	192.168.25.15
+```
+ This response can be randomized using the `loadbalance` plugin
