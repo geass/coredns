@@ -122,7 +122,7 @@ func NewDNSController(kubeClient kubernetes.Interface, opts DNSControlOpts) *DNS
 		},
 		&api.Service{},
 		opts.ResyncPeriod,
-		cache.ResourceEventHandlerFuncs{AddFunc: dns.Add, UpdateFunc: dns.Update, DeleteFunc: dns.Delete},
+		cache.ResourceEventHandlerFuncs{AddFunc: dns.add, UpdateFunc: dns.update, DeleteFunc: dns.delete},
 		cache.Indexers{svcNameNamespaceIndex: svcNameNamespaceIndexFunc, svcIPIndex: svcIPIndexer},
 		object.ToService,
 	)
@@ -135,7 +135,7 @@ func NewDNSController(kubeClient kubernetes.Interface, opts DNSControlOpts) *DNS
 			},
 			&api.Pod{},
 			opts.ResyncPeriod,
-			cache.ResourceEventHandlerFuncs{AddFunc: dns.Add, UpdateFunc: dns.Update, DeleteFunc: dns.Delete},
+			cache.ResourceEventHandlerFuncs{AddFunc: dns.add, UpdateFunc: dns.update, DeleteFunc: dns.delete},
 			cache.Indexers{podIPIndex: podIPIndexFunc},
 			object.ToPod,
 		)
@@ -149,7 +149,7 @@ func NewDNSController(kubeClient kubernetes.Interface, opts DNSControlOpts) *DNS
 			},
 			&api.Endpoints{},
 			opts.ResyncPeriod,
-			cache.ResourceEventHandlerFuncs{AddFunc: dns.Add, UpdateFunc: dns.Update, DeleteFunc: dns.Delete},
+			cache.ResourceEventHandlerFuncs{AddFunc: dns.add, UpdateFunc: dns.update, DeleteFunc: dns.delete},
 			cache.Indexers{epNameNamespaceIndex: epNameNamespaceIndexFunc, epIPIndex: epIPIndexFunc},
 			object.ToEndpoints)
 	}

@@ -16,7 +16,7 @@ const(
 	Pod = "pod"
 )
 
-// serviceFQDN returns the k8s cluster dns spec service FQDN for the service (or endpoint) object.
+// ServiceFQDN returns the k8s cluster dns spec service FQDN for the service (or endpoint) object.
 func ServiceFQDN(obj meta.Object, zone string) string {
 	return dnsutil.Join(obj.GetName(), obj.GetNamespace(), Svc, zone)
 }
@@ -43,6 +43,7 @@ func EndpointFQDN(ep *object.Endpoints, zone string, endpointNameMode bool) []st
 	return names
 }
 
+// EndpointHostname constructs the hostname of an endpoint address
 func EndpointHostname(addr object.EndpointAddress, endpointNameMode bool) string {
 	if addr.Hostname != "" {
 		return addr.Hostname

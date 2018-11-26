@@ -102,9 +102,9 @@ func (dns *DNSControl) sendUpdates(oldObj, newObj interface{}) {
 	}
 }
 
-func (dns *DNSControl) Add(obj interface{})               { dns.sendUpdates(nil, obj) }
-func (dns *DNSControl) Delete(obj interface{})            { dns.sendUpdates(obj, nil) }
-func (dns *DNSControl) Update(oldObj, newObj interface{}) { dns.sendUpdates(oldObj, newObj) }
+func (dns *DNSControl) add(obj interface{})               { dns.sendUpdates(nil, obj) }
+func (dns *DNSControl) delete(obj interface{})            { dns.sendUpdates(obj, nil) }
+func (dns *DNSControl) update(oldObj, newObj interface{}) { dns.sendUpdates(oldObj, newObj) }
 
 // subsetsEquivalent checks if two endpoint subsets are significantly equivalent
 // I.e. that they have the same ready addresses, host names, ports (including protocol
@@ -145,7 +145,7 @@ func subsetsEquivalent(sa, sb object.EndpointSubset) bool {
 	return true
 }
 
-// endpointsEquivalent checks if the update to an endpoint is something
+// EndpointsEquivalent checks if the update to an endpoint is something
 // that matters to us or if they are effectively equivalent.
 func EndpointsEquivalent(a, b *object.Endpoints) bool {
 
