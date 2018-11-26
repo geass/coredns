@@ -65,7 +65,7 @@ var dnsTestCases = []test.Case{
 		Qname: "*._not-udp-or-tcp.svc1.testns.example.com.", Qtype: dns.TypeSRV,
 		Rcode: dns.RcodeNameError,
 		Ns: []dns.RR{
-			test.SOA("example.com.	300	IN	SOA	ns.dns.example.com. hostmaster.example.com. 1499347823 7200 1800 86400 60"),
+			test.SOA("example.com.	30	IN	SOA	ns.dns.example.com. hostmaster.example.com. 1499347823 7200 1800 86400 60"),
 		},
 	},
 	// SRV Service
@@ -84,7 +84,7 @@ var dnsTestCases = []test.Case{
 		Qname: "svc1.testns.example.com.", Qtype: dns.TypeAAAA,
 		Rcode: dns.RcodeSuccess,
 		Ns: []dns.RR{
-			test.SOA("example.com.	300	IN	SOA	ns.dns.example.com. hostmaster.example.com. 1499347823 7200 1800 86400 60"),
+			test.SOA("example.com.	30	IN	SOA	ns.dns.example.com. hostmaster.example.com. 1499347823 7200 1800 86400 60"),
 		},
 	},
 	// AAAA Service (non-existing service)
@@ -92,7 +92,7 @@ var dnsTestCases = []test.Case{
 		Qname: "svc0.testns.example.com.", Qtype: dns.TypeAAAA,
 		Rcode: dns.RcodeNameError,
 		Ns: []dns.RR{
-			test.SOA("example.com.	300	IN	SOA	ns.dns.example.com. hostmaster.example.com. 1499347823 7200 1800 86400 60"),
+			test.SOA("example.com.	30	IN	SOA	ns.dns.example.com. hostmaster.example.com. 1499347823 7200 1800 86400 60"),
 		},
 	},
 	// A Service (non-existing service)
@@ -100,7 +100,7 @@ var dnsTestCases = []test.Case{
 		Qname: "svc0.testns.example.com.", Qtype: dns.TypeA,
 		Rcode: dns.RcodeNameError,
 		Ns: []dns.RR{
-			test.SOA("example.com.	300	IN	SOA	ns.dns.example.com. hostmaster.example.com. 1499347823 7200 1800 86400 60"),
+			test.SOA("example.com.	30	IN	SOA	ns.dns.example.com. hostmaster.example.com. 1499347823 7200 1800 86400 60"),
 		},
 	},
 	// A Service (non-existing namespace)
@@ -108,7 +108,7 @@ var dnsTestCases = []test.Case{
 		Qname: "svc0.svc-nons.example.com.", Qtype: dns.TypeA,
 		Rcode: dns.RcodeNameError,
 		Ns: []dns.RR{
-			test.SOA("example.com.	300	IN	SOA	ns.dns.example.com. hostmaster.example.com. 1499347823 7200 1800 86400 60"),
+			test.SOA("example.com.	30	IN	SOA	ns.dns.example.com. hostmaster.example.com. 1499347823 7200 1800 86400 60"),
 		},
 	},
 	// AAAA Service

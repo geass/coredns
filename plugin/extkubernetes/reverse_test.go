@@ -86,35 +86,35 @@ func TestReverse(t *testing.T) {
 			Qname: "5.3.2.1.in-addr.arpa.", Qtype: dns.TypePTR,
 			Rcode: dns.RcodeNameError,
 			Ns: []dns.RR{
-				test.SOA("2.1.in-addr.arpa.	300	IN	SOA	ns.dns.2.1.in-addr.arpa. hostmaster.2.1.in-addr.arpa. 1502782828 7200 1800 86400 60"),
+				test.SOA("2.1.in-addr.arpa.	30	IN	SOA	ns.dns.2.1.in-addr.arpa. hostmaster.2.1.in-addr.arpa. 1502782828 7200 1800 86400 60"),
 			},
 		},
 		{
 			Qname: "example.org.example.com.", Qtype: dns.TypePTR,
 			Rcode: dns.RcodeNameError,
 			Ns: []dns.RR{
-				test.SOA("example.com.       300     IN      SOA     ns.dns.example.com. hostmaster.example.com. 1502989566 7200 1800 86400 60"),
+				test.SOA("example.com.       30     IN      SOA     ns.dns.example.com. hostmaster.example.com. 1502989566 7200 1800 86400 60"),
 			},
 		},
 		{
 			Qname: "svc1.testns.example.com.", Qtype: dns.TypePTR,
 			Rcode: dns.RcodeSuccess,
 			Ns: []dns.RR{
-				test.SOA("example.com.       300     IN      SOA     ns.dns.example.com. hostmaster.example.com. 1502989566 7200 1800 86400 60"),
+				test.SOA("example.com.       30     IN      SOA     ns.dns.example.com. hostmaster.example.com. 1502989566 7200 1800 86400 60"),
 			},
 		},
 		{
 			Qname: "svc1.testns.2.1.in-addr.arpa.", Qtype: dns.TypeA,
 			Rcode: dns.RcodeNameError,
 			Ns: []dns.RR{
-				test.SOA("2.1.in-addr.arpa.       300     IN      SOA     ns.dns.2.1.in-addr.arpa. hostmaster.2.1.in-addr.arpa. 1502989566 7200 1800 86400 60"),
+				test.SOA("2.1.in-addr.arpa.       30     IN      SOA     ns.dns.2.1.in-addr.arpa. hostmaster.2.1.in-addr.arpa. 1502989566 7200 1800 86400 60"),
 			},
 		},
 		{
 			Qname: "100.0.0.10.example.com.", Qtype: dns.TypePTR,
 			Rcode: dns.RcodeNameError,
 			Ns: []dns.RR{
-				test.SOA("example.com.       300     IN      SOA     ns.dns.example.com. hostmaster.example.com. 1502989566 7200 1800 86400 60"),
+				test.SOA("example.com.       30     IN      SOA     ns.dns.example.com. hostmaster.example.com. 1502989566 7200 1800 86400 60"),
 			},
 		},
 	}
