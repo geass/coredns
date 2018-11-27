@@ -2,11 +2,11 @@
 
 ## Name
 
-*extkubernetes* - enables the reading external zone data from a Kubernetes cluster for Load Balancer IPs.
+*extkubernetes* - enables reading external zone data from a Kubernetes cluster for Load Balancer IPs.
 
 ## Description
 
-Creates A/AAAA, SRV, and PTR records for the External IPs of each LoadBalancer type Service in the Kubernetes cluster.
+Creates A/AAAA, SRV, and PTR records for the External IPs of each LoadBalancer type Service in a Kubernetes cluster.
 
 
 This plugin can only be used once per Server Block.
@@ -35,7 +35,7 @@ extkubernetes [ZONES...] {
 }
 ```
 
-* `resyncperiod` specifies the Kubernetes data API **DURATION** period.
+* `resyncperiod` specifies the Kubernetes API refresh period to be **DURATION**.
 * `endpoint` specifies the **URL** for a remote k8s API endpoint.
    If omitted, it will connect to k8s in-cluster using the cluster service account.
    Multiple k8s API endpoints could be specified:
@@ -45,7 +45,7 @@ extkubernetes [ZONES...] {
    This option is ignored if connecting in-cluster (i.e. endpoint is not specified).
 * `kubeconfig` **KUBECONFIG** **CONTEXT** authenticates the connection to a remote k8s cluster using a kubeconfig file. It supports TLS, username and password, or token-based authentication. This option is ignored if connecting in-cluster (i.e. endpoint is not specified).
 * `namespaces` **NAMESPACE [NAMESPACE...]**, only exposes the k8s namespaces listed.
-   If this option is omitted all namespaces are exposed
+   If this option is omitted all namespaces are exposed.
 * `labels` **EXPRESSION** only exposes the records for Kubernetes objects that match this label selector.
    The label selector syntax is described in the
    [Kubernetes User Guide - Labels](http://kubernetes.io/docs/user-guide/labels/). An example that
