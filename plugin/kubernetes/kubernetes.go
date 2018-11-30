@@ -563,17 +563,16 @@ func (k *Kubernetes) findServices(r recordRequest, zone string, external bool) (
 
 			err = nil
 
-			if !external {
+			if external {
+				for _, ip := range svc.ExternalIPs {
+					s := msg.Service{Host: ip, Port: int(p.Port), TTL: k.ttl}
+					s.Key = strings.Join([]string{zonePath, svc.Namespace, svc.Name}, "/")
+					services = append(services, s)
+				}
+			} else {
 				s := msg.Service{Host: svc.ClusterIP, Port: int(p.Port), TTL: k.ttl}
 				s.Key = strings.Join([]string{zonePath, Svc, svc.Namespace, svc.Name}, "/")
 				services = append(services, s)
-				return services, err
-			}
-			for _, ip := range svc.ExternalIPs {
-				s := msg.Service{Host: ip, Port: int(p.Port), TTL: k.ttl}
-				s.Key = strings.Join([]string{zonePath, svc.Namespace, svc.Name}, "/")
-				services = append(services, s)
-				return services, err
 			}
 		}
 	}
