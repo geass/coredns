@@ -99,20 +99,36 @@ func (k *Kubernetes) transfer(c chan dns.RR, zone string) {
 
 	defer close(c)
 
+	externalZone := k.externalZone(zone)
 	zonePath := msg.Path(zone, "coredns")
 	serviceList := k.APIConn.ServiceList()
+
 	for _, svc := range serviceList {
 		if !k.namespaceExposed(svc.Namespace) {
 			continue
 		}
-		svcBase := []string{zonePath, Svc, svc.Namespace, svc.Name}
+
+		svcBase := []string{zonePath}
+		if !externalZone {
+			svcBase = append(svcBase, Svc)
+		}
+		svcBase = append(svcBase, []string{svc.Namespace, svc.Name}...)
+
 		switch svc.Type {
 		case api.ServiceTypeClusterIP, api.ServiceTypeNodePort, api.ServiceTypeLoadBalancer:
-			clusterIP := net.ParseIP(svc.ClusterIP)
-			if clusterIP != nil {
+			var ips []string
+			if !externalZone {
+				clusterIP := net.ParseIP(svc.ClusterIP)
+				if clusterIP != nil {
+					ips = append(ips, svc.ClusterIP)
+				}
+			} else {
+				ips = svc.ExternalIPs
+			}
+			for _, ip := range ips {
 				for _, p := range svc.Ports {
 
-					s := msg.Service{Host: svc.ClusterIP, Port: int(p.Port), TTL: k.ttl}
+					s := msg.Service{Host: ip, Port: int(p.Port), TTL: k.ttl}
 					s.Key = strings.Join(svcBase, "/")
 
 					// Change host from IP to Name for SRV records
@@ -133,8 +149,14 @@ func (k *Kubernetes) transfer(c chan dns.RR, zone string) {
 
 					c <- s.NewSRV(msg.Domain(s.Key), 100)
 				}
+			}
 
-				//  Skip endpoint discovery if clusterIP is defined
+			//  Skip endpoint discovery if service is not headless
+			if svc.ClusterIP != api.ClusterIPNone {
+				continue
+			}
+			//  Skip endpoint discovery if this is an external zone
+			if externalZone {
 				continue
 			}
 
@@ -176,6 +198,11 @@ func (k *Kubernetes) transfer(c chan dns.RR, zone string) {
 			}
 
 		case api.ServiceTypeExternalName:
+
+			//  Skip CNAMEs if this is an external zone
+			if externalZone {
+				continue
+			}
 
 			s := msg.Service{Key: strings.Join(svcBase, "/"), Host: svc.ExternalName, TTL: k.ttl}
 			if t, _ := s.HostType(); t == dns.TypeCNAME {
