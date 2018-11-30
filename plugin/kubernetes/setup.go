@@ -132,6 +132,7 @@ func ParseStanza(c *caddy.Controller) (*Kubernetes, error) {
 		initEndpointsCache: true,
 		ignoreEmptyService: false,
 		resyncPeriod:       defaultResyncPeriod,
+		expose:             exposeCluster,
 	}
 	k8s.opts = opts
 
@@ -147,19 +148,6 @@ func ParseStanza(c *caddy.Controller) (*Kubernetes, error) {
 		for i := 0; i < len(c.ServerBlockKeys); i++ {
 			k8s.Zones[i] = plugin.Host(c.ServerBlockKeys[i]).Normalize()
 		}
-	}
-
-	k8s.primaryZoneIndex = -1
-	for i, z := range k8s.Zones {
-		if dnsutil.IsReverse(z) > 0 {
-			continue
-		}
-		k8s.primaryZoneIndex = i
-		break
-	}
-
-	if k8s.primaryZoneIndex == -1 {
-		return nil, errors.New("non-reverse zone name must be used")
 	}
 
 	for c.NextBlock() {
@@ -287,9 +275,66 @@ func ParseStanza(c *caddy.Controller) (*Kubernetes, error) {
 				continue
 			}
 			return nil, c.ArgErr()
+		case "external":
+			args := c.RemainingArgs()
+			if len(args) > 0 {
+				k8s.opts.expose = exposeAll
+				for _, a := range args {
+					extZone := plugin.Host(a).Normalize()
+					found := false
+					for _, z := range k8s.Zones {
+						if dnsutil.IsReverse(z) > 0 {
+							continue
+						}
+						if z == extZone {
+							found = true
+							break
+						}
+					}
+					if !found {
+						return nil, c.Errf("external zone '%s' is not in plugin/block zone list", c.Val())
+					}
+					k8s.externalZones = append(k8s.externalZones, extZone)
+				}
+				continue
+			}
+			return nil, c.ArgErr()
 		default:
 			return nil, c.Errf("unknown property '%s'", c.Val())
 		}
+	}
+
+	// determine if all zones are external
+	fwdZoneCount := 0
+	for _, z := range k8s.Zones {
+		if dnsutil.IsReverse(z) > 0 {
+			continue
+		}
+		fwdZoneCount++
+	}
+	// if all non-reverse zones are external adjust watches, and record exposure.
+	if fwdZoneCount == len(k8s.externalZones) {
+		// disable pod/endpoint watches
+		k8s.opts.initEndpointsCache = false
+		k8s.opts.initPodCache = false
+		// only  expose external records (hide cluster internal records)
+		k8s.opts.expose = exposeExternal
+	}
+
+	// determine primary zone index
+	k8s.primaryZoneIndex = -1
+	for i, z := range k8s.Zones {
+		if dnsutil.IsReverse(z) > 0 {
+			continue
+		}
+		if k8s.externalZone(z) {
+			continue
+		}
+		k8s.primaryZoneIndex = i
+		break
+	}
+	if k8s.primaryZoneIndex == -1 && k8s.opts.expose != exposeExternal {
+		return nil, errors.New("non-reverse zone name must be used")
 	}
 
 	return k8s, nil

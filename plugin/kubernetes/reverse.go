@@ -28,15 +28,31 @@ func (k *Kubernetes) Reverse(state request.Request, exact bool, opt plugin.Optio
 // serviceRecordForIP gets a service record with a cluster ip matching the ip argument
 // If a service cluster ip does not match, it checks all endpoints
 func (k *Kubernetes) serviceRecordForIP(ip, name string) []msg.Service {
-	// First check services with cluster ips
+	// First check services with service ips (cluster or external ips)
 	for _, service := range k.APIConn.SvcIndexReverse(ip) {
 		if len(k.Namespaces) > 0 && !k.namespaceExposed(service.Namespace) {
 			continue
 		}
-		domain := strings.Join([]string{service.Name, service.Namespace, Svc, k.primaryZone()}, ".")
+
+		if service.ClusterIP == ip {
+			if k.opts.expose == exposeExternal {
+				continue
+			}
+			domain := strings.Join([]string{service.Name, service.Namespace, Svc, k.primaryZone()}, ".")
+			return []msg.Service{{Host: domain, TTL: k.ttl}}
+		}
+
+		if k.opts.expose == exposeCluster {
+			continue
+		}
+		domain := strings.Join([]string{service.Name, service.Namespace, k.externalZones[0]}, ".")
 		return []msg.Service{{Host: domain, TTL: k.ttl}}
 	}
-	// If no cluster ips match, search endpoints
+	// no service ips were found, and we are only exposing external records, so exit
+	if k.opts.expose == exposeExternal {
+		return nil
+	}
+	// No service ips match, and this is an internal query, search endpoints
 	for _, ep := range k.APIConn.EpIndexReverse(ip) {
 		if len(k.Namespaces) > 0 && !k.namespaceExposed(ep.Namespace) {
 			continue

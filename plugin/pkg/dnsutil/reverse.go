@@ -39,6 +39,12 @@ func IsReverse(name string) int {
 	if strings.HasSuffix(name, IP6arpa) {
 		return 2
 	}
+	if "."+name == IP4arpa {
+		return 1
+	}
+	if "."+name == IP6arpa {
+		return 2
+	}
 	return 0
 }
 

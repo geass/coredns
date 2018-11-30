@@ -45,6 +45,7 @@ kubernetes [ZONES...] {
     transfer to ADDRESS...
     fallthrough [ZONES...]
     ignore empty_service
+    external ZONES...
 }
 ```
 
@@ -109,6 +110,10 @@ kubernetes [ZONES...] {
 * `ignore empty_service` return NXDOMAIN for services without any ready endpoint addresses (e.g., ready pods).
   This allows the querying pod to continue searching for the service in the search path.
   The search path could, for example, include another Kubernetes cluster.
+* `external` will synthesize records in the listed **[ZONES...]** for all Kubernetes services with Load Balancer IPs.
+  All **[ZONES...]** must exist in the plugin's zones or server block.  If all non-reverse zones in the
+  plugin's zones or server block are listed, then no internal service records will be synthesized. Records are in the
+  form of `service-name.namespace.zone.`
 
 ## Health
 
@@ -149,6 +154,27 @@ Connect to Kubernetes with CoreDNS running outside the cluster:
 kubernetes cluster.local {
     endpoint https://k8s-endpoint:8443
     tls cert key cacert
+}
+~~~
+
+## Exposing Load Balancer IPs
+
+Expose internal service cluster ips in the `cluster.local` zone, and external load
+balancer ips in the `my.zone.com. zone.
+
+~~~ txt
+kubernetes cluster.local my.zone.com {
+    external my.zone.com
+}
+~~~
+
+Connect to Kubernetes with CoreDNS running outside the cluster, and only expose external IPs in the zone `my.zone.com`:
+
+~~~ txt
+kubernetes my.zone.com {
+    endpoint https://k8s-endpoint:8443
+    tls cert key cacert
+    external my.zone.com
 }
 ~~~
 

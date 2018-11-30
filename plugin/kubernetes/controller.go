@@ -25,6 +25,9 @@ const (
 	svcIPIndex            = "ServiceIP"
 	epNameNamespaceIndex  = "EndpointNameNamespace"
 	epIPIndex             = "EndpointsIP"
+	exposeAll             = 0
+	exposeCluster         = 1
+	exposeExternal        = 2
 )
 
 type dnsController interface {
@@ -97,6 +100,7 @@ type dnsControlOpts struct {
 
 	zones            []string
 	endpointNameMode bool
+	expose           int
 }
 
 // newDNSController creates a controller for CoreDNS.
@@ -110,6 +114,16 @@ func newdnsController(kubeClient kubernetes.Interface, opts dnsControlOpts) *dns
 		endpointNameMode: opts.endpointNameMode,
 	}
 
+	var svcIPIndexer cache.IndexFunc
+	switch opts.expose {
+	case exposeCluster:
+		svcIPIndexer = svcClusterIPIndexFunc
+	case exposeExternal:
+		svcIPIndexer = svcExternalIPsIndexFunc
+	case exposeAll:
+		svcIPIndexer = svcAllIPsIndexFunc
+	}
+
 	dns.svcLister, dns.svcController = object.NewIndexerInformer(
 		&cache.ListWatch{
 			ListFunc:  serviceListFunc(dns.client, api.NamespaceAll, dns.selector),
@@ -118,7 +132,7 @@ func newdnsController(kubeClient kubernetes.Interface, opts dnsControlOpts) *dns
 		&api.Service{},
 		opts.resyncPeriod,
 		cache.ResourceEventHandlerFuncs{AddFunc: dns.Add, UpdateFunc: dns.Update, DeleteFunc: dns.Delete},
-		cache.Indexers{svcNameNamespaceIndex: svcNameNamespaceIndexFunc, svcIPIndex: svcIPIndexFunc},
+		cache.Indexers{svcNameNamespaceIndex: svcNameNamespaceIndexFunc, svcIPIndex: svcIPIndexer},
 		object.ToService,
 	)
 
@@ -167,12 +181,28 @@ func podIPIndexFunc(obj interface{}) ([]string, error) {
 	return []string{p.PodIP}, nil
 }
 
-func svcIPIndexFunc(obj interface{}) ([]string, error) {
+func svcAllIPsIndexFunc(obj interface{}) ([]string, error) {
+	svc, ok := obj.(*object.Service)
+	if !ok {
+		return nil, errObj
+	}
+	return append(svc.ExternalIPs, svc.ClusterIP), nil
+}
+
+func svcClusterIPIndexFunc(obj interface{}) ([]string, error) {
 	svc, ok := obj.(*object.Service)
 	if !ok {
 		return nil, errObj
 	}
 	return []string{svc.ClusterIP}, nil
+}
+
+func svcExternalIPsIndexFunc(obj interface{}) ([]string, error) {
+	svc, ok := obj.(*object.Service)
+	if !ok {
+		return nil, errObj
+	}
+	return svc.ExternalIPs, nil
 }
 
 func svcNameNamespaceIndexFunc(obj interface{}) ([]string, error) {
