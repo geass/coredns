@@ -79,8 +79,8 @@ const (
 	IP4arpa = ".in-addr.arpa."
 	// IP6arpa is the reverse tree suffix for v6 IP addresses.
 	IP6arpa = ".ip6.arpa."
-	// IP4arpa is the reverse tree suffix for v4 IP addresses.
+	// IP4arpaDom is the reverse tree domain for v4 IP addresses.
 	IP4arpaDom = "in-addr.arpa."
-	// IP6arpa is the reverse tree suffix for v6 IP addresses.
+	// IP6arpaDom is the reverse tree domain for v6 IP addresses.
 	IP6arpaDom = "ip6.arpa."
 )
