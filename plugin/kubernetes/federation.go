@@ -3,6 +3,7 @@ package kubernetes
 import (
 	"errors"
 
+	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/etcd/msg"
 	"github.com/coredns/coredns/plugin/pkg/dnsutil"
 	"github.com/coredns/coredns/request"
@@ -31,7 +32,8 @@ func (k *Kubernetes) Federations(state request.Request, fname, fzone string) (ms
 	if err != nil {
 		return msg.Service{}, err
 	}
-	r, err := parseRequest(state)
+
+	r, err := parseRequest(state, "" != plugin.Zones(k.externalZones).Matches(state.Name()))
 	if err != nil {
 		return msg.Service{}, err
 	}

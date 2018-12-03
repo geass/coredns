@@ -159,8 +159,8 @@ kubernetes cluster.local {
 
 ## Exposing Load Balancer IPs
 
-Expose internal service cluster ips in the `cluster.local` zone, and external load
-balancer ips in the `my.zone.com. zone.
+Expose internal service cluster IPs in the `cluster.local` zone, and external load
+balancer IPs in the `my.zone.com. zone.
 
 ~~~ txt
 kubernetes cluster.local my.zone.com {

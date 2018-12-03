@@ -277,28 +277,15 @@ func ParseStanza(c *caddy.Controller) (*Kubernetes, error) {
 			return nil, c.ArgErr()
 		case "external":
 			args := c.RemainingArgs()
-			if len(args) > 0 {
-				k8s.opts.expose = exposeAll
-				for _, a := range args {
-					extZone := plugin.Host(a).Normalize()
-					found := false
-					for _, z := range k8s.Zones {
-						if dnsutil.IsReverse(z) > 0 {
-							continue
-						}
-						if z == extZone {
-							found = true
-							break
-						}
-					}
-					if !found {
-						return nil, c.Errf("external zone '%s' is not in plugin/block zone list", c.Val())
-					}
-					k8s.externalZones = append(k8s.externalZones, extZone)
-				}
-				continue
+			if len(args) == 0 {
+				return nil, c.ArgErr()
 			}
-			return nil, c.ArgErr()
+			k8s.opts.expose = exposeAll
+			for _, a := range args {
+				k8s.externalZones = append(k8s.externalZones, plugin.Host(a).Normalize())
+			}
+			continue
+
 		default:
 			return nil, c.Errf("unknown property '%s'", c.Val())
 		}
@@ -327,7 +314,7 @@ func ParseStanza(c *caddy.Controller) (*Kubernetes, error) {
 		if dnsutil.IsReverse(z) > 0 {
 			continue
 		}
-		if k8s.externalZone(z) {
+		if "" != plugin.Zones(k8s.externalZones).Matches(z) {
 			continue
 		}
 		k8s.primaryZoneIndex = i

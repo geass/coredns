@@ -15,7 +15,7 @@ func (APIConnTest) HasSynced() bool                          { return true }
 func (APIConnTest) Run()                                     { return }
 func (APIConnTest) Stop() error                              { return nil }
 func (APIConnTest) PodIndex(string) []*object.Pod            { return nil }
-func (APIConnTest) SvcIndex(string) []*object.Service        { return nil }
+func (APIConnTest) ServiceList() []*object.Service        { return nil }
 func (APIConnTest) SvcIndexReverse(string) []*object.Service { return nil }
 func (APIConnTest) EpIndex(string) []*object.Endpoints       { return nil }
 func (APIConnTest) EndpointsList() []*object.Endpoints       { return nil }
@@ -24,7 +24,7 @@ func (APIConnTest) SetWatchChan(watch.Chan)                  {}
 func (APIConnTest) Watch(string) error                       { return nil }
 func (APIConnTest) StopWatching(string)                      {}
 
-func (APIConnTest) ServiceList() []*object.Service {
+func (APIConnTest) SvcIndex(string) []*object.Service {
 	svcs := []*object.Service{
 		{
 			Name:      "dns-service",
@@ -64,14 +64,14 @@ func TestNsAddr(t *testing.T) {
 	k := New([]string{"inter.webs.test."})
 	k.APIConn = &APIConnTest{}
 
-	cdr := k.nsAddr()
+	cdr := k.nsAddr(false)
 	expected := "10.0.0.111"
 
-	if cdr.A.String() != expected {
-		t.Errorf("Expected A to be %q, got %q", expected, cdr.A.String())
+	if cdr[0].A.String() != expected {
+		t.Errorf("Expected A to be %q, got %q", expected, cdr[0].A.String())
 	}
 	expected = "dns-service.kube-system.svc."
-	if cdr.Hdr.Name != expected {
-		t.Errorf("Expected Hdr.Name to be %q, got %q", expected, cdr.Hdr.Name)
+	if cdr[0].Hdr.Name != expected {
+		t.Errorf("Expected Hdr.Name to be %q, got %q", expected, cdr[0].Hdr.Name)
 	}
 }

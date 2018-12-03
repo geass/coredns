@@ -93,7 +93,7 @@ var (
 // Services implements the ServiceBackend interface.
 func (k *Kubernetes) Services(state request.Request, exact bool, opt plugin.Options) (svcs []msg.Service, err error) {
 
-	external := k.externalZone(state.Name())
+	external := "" != plugin.Zones(k.externalZones).Matches(state.Name())
 
 	// We're looking again at types, which we've already done in ServeDNS, but there are some types k8s just can't answer.
 	switch state.QType() {
@@ -117,21 +117,22 @@ func (k *Kubernetes) Services(state request.Request, exact bool, opt plugin.Opti
 
 	case dns.TypeNS:
 		// We can only get here if the qname equals the zone, see ServeDNS in handler.go.
-		if external {
-			svc := msg.Service{Host: state.LocalIP(), Key: msg.Path(state.QName(), "coredns")}
-			return []msg.Service{svc}, nil
-		}
-		ns := k.nsAddr()
-		svc := msg.Service{Host: ns.A.String(), Key: msg.Path(state.QName(), "coredns")}
+		ns := k.nsAddr(external)
+		svc := msg.Service{Host: ns[0].A.String(), Key: msg.Path(state.QName(), "coredns")}
 		return []msg.Service{svc}, nil
 	}
 
-	if state.QType() == dns.TypeA && isDefaultNS(state.Name(), state.Zone) && !external {
-		// If this is an A request for "ns.dns", respond with a "fake" record for coredns.
-		// SOA records always use this hardcoded name
-		ns := k.nsAddr()
-		svc := msg.Service{Host: ns.A.String(), Key: msg.Path(state.QName(), "coredns")}
-		return []msg.Service{svc}, nil
+	if state.QType() == dns.TypeA && isDefaultNS(state.Name(), state.Zone) {
+		// create an A record for the NS target
+		nss := k.nsAddr(external)
+		var svcs []msg.Service
+		for _, ns := range nss {
+			if ns.A.String() == "0.0.0.0" {
+				continue
+			}
+			svcs = append(svcs, msg.Service{Host: ns.A.String(), Key: msg.Path(state.QName(), "coredns")})
+		}
+		return svcs, nil
 	}
 
 	s, e := k.Records(state, false)
@@ -290,18 +291,9 @@ func (k *Kubernetes) InitKubeCache() (err error) {
 // Records looks up services in kubernetes.
 func (k *Kubernetes) Records(state request.Request, exact bool) ([]msg.Service, error) {
 
-	external := k.externalZone(state.Name())
+	external := "" != plugin.Zones(k.externalZones).Matches(state.Name())
 
-	var (
-		r recordRequest
-		e error
-	)
-
-	if external {
-		r, e = parseRequestExternal(state)
-	} else {
-		r, e = parseRequest(state)
-	}
+	r, e := parseRequest(state, external)
 
 	if e != nil {
 		return nil, e
@@ -323,8 +315,20 @@ func (k *Kubernetes) Records(state request.Request, exact bool) ([]msg.Service, 
 		return pods, err
 	}
 
-	services, err := k.findServices(r, state.Zone, external)
-	return services, err
+	// handle empty service name
+	if r.service == "" {
+		if k.namespace(r.namespace) || wildcard(r.namespace) {
+			// NODATA
+			return nil, nil
+		}
+		// NXDOMAIN
+		return nil, errNoItems
+	}
+
+	if external {
+		return k.findServicesExternal(r, state.Zone)
+	}
+	return k.findServices(r, state.Zone)
 }
 
 // serviceFQDN returns the k8s cluster dns spec service FQDN for the service (or endpoint) object.
@@ -441,8 +445,8 @@ func (k *Kubernetes) findPods(r recordRequest, zone string) (pods []msg.Service,
 }
 
 // findServices returns the services matching r from the cache.
-func (k *Kubernetes) findServices(r recordRequest, zone string, external bool) (services []msg.Service, err error) {
-	if !external && k.opts.expose == exposeExternal {
+func (k *Kubernetes) findServices(r recordRequest, zone string) (services []msg.Service, err error) {
+	if k.opts.expose == exposeExternal {
 		return nil, nil
 	}
 	zonePath := msg.Path(zone, "coredns")
@@ -460,16 +464,6 @@ func (k *Kubernetes) findServices(r recordRequest, zone string, external bool) (
 		endpointsList     []*object.Endpoints
 		serviceList       []*object.Service
 	)
-
-	// handle empty service name
-	if r.service == "" {
-		if k.namespace(r.namespace) || wildcard(r.namespace) {
-			// NODATA
-			return nil, nil
-		}
-		// NXDOMAIN
-		return nil, errNoItems
-	}
 
 	if wildcard(r.service) || wildcard(r.namespace) {
 		serviceList = k.APIConn.ServiceList()
@@ -491,7 +485,7 @@ func (k *Kubernetes) findServices(r recordRequest, zone string, external bool) (
 			continue
 		}
 
-		if k.opts.ignoreEmptyService && svc.ClusterIP != api.ClusterIPNone && !external {
+		if k.opts.ignoreEmptyService && svc.ClusterIP != api.ClusterIPNone {
 			// serve NXDOMAIN if no endpoint is able to answer
 			podsCount := 0
 			for _, ep := range endpointsListFunc() {
@@ -506,7 +500,7 @@ func (k *Kubernetes) findServices(r recordRequest, zone string, external bool) (
 		}
 
 		// Endpoint query or headless service
-		if svc.ClusterIP == api.ClusterIPNone || r.endpoint != "" && !external {
+		if svc.ClusterIP == api.ClusterIPNone || r.endpoint != "" {
 			if endpointsList == nil {
 				endpointsList = endpointsListFunc()
 			}
@@ -543,7 +537,7 @@ func (k *Kubernetes) findServices(r recordRequest, zone string, external bool) (
 		}
 
 		// ExternalName (CNAME) service
-		if svc.Type == api.ServiceTypeExternalName && !external {
+		if svc.Type == api.ServiceTypeExternalName {
 			s := msg.Service{Key: strings.Join([]string{zonePath, Svc, svc.Namespace, svc.Name}, "/"), Host: svc.ExternalName, TTL: k.ttl}
 			if t, _ := s.HostType(); t == dns.TypeCNAME {
 				s.Key = strings.Join([]string{zonePath, Svc, svc.Namespace, svc.Name}, "/")
@@ -559,18 +553,53 @@ func (k *Kubernetes) findServices(r recordRequest, zone string, external bool) (
 			if !(match(r.port, p.Name) && match(r.protocol, string(p.Protocol))) {
 				continue
 			}
-
 			err = nil
+			s := msg.Service{Host: svc.ClusterIP, Port: int(p.Port), TTL: k.ttl}
+			s.Key = strings.Join([]string{zonePath, Svc, svc.Namespace, svc.Name}, "/")
+			services = append(services, s)
 
-			if external {
-				for _, ip := range svc.ExternalIPs {
-					s := msg.Service{Host: ip, Port: int(p.Port), TTL: k.ttl}
-					s.Key = strings.Join([]string{zonePath, svc.Namespace, svc.Name}, "/")
-					services = append(services, s)
-				}
-			} else {
-				s := msg.Service{Host: svc.ClusterIP, Port: int(p.Port), TTL: k.ttl}
-				s.Key = strings.Join([]string{zonePath, Svc, svc.Namespace, svc.Name}, "/")
+		}
+	}
+	return services, err
+}
+
+// findServices returns the services matching r from the cache.
+func (k *Kubernetes) findServicesExternal(r recordRequest, zone string) (services []msg.Service, err error) {
+	zonePath := msg.Path(zone, "coredns")
+
+	err = errNoItems
+	if wildcard(r.service) && !wildcard(r.namespace) {
+		// If namespace exist, err should be nil, so that we return nodata instead of NXDOMAIN
+		if k.namespace(r.namespace) {
+			err = nil
+		}
+	}
+
+	var serviceList []*object.Service
+	if wildcard(r.service) || wildcard(r.namespace) {
+		serviceList = k.APIConn.ServiceList()
+	} else {
+		idx := object.ServiceKey(r.service, r.namespace)
+		serviceList = k.APIConn.SvcIndex(idx)
+	}
+
+	for _, svc := range serviceList {
+		if !(match(r.namespace, svc.Namespace) && match(r.service, svc.Name)) {
+			continue
+		}
+
+		if wildcard(r.namespace) && !k.namespaceExposed(svc.Namespace) {
+			continue
+		}
+
+		for _, p := range svc.Ports {
+			if !(match(r.port, p.Name) && match(r.protocol, string(p.Protocol))) {
+				continue
+			}
+			err = nil
+			for _, ip := range svc.ExternalIPs {
+				s := msg.Service{Host: ip, Port: int(p.Port), TTL: k.ttl}
+				s.Key = strings.Join([]string{zonePath, svc.Namespace, svc.Name}, "/")
 				services = append(services, s)
 			}
 		}
@@ -592,9 +621,4 @@ func match(a, b string) bool {
 // wildcard checks whether s contains a wildcard value defined as "*" or "any".
 func wildcard(s string) bool {
 	return s == "*" || s == "any"
-}
-
-// externalZone returns true if the name is in an external zone
-func (k *Kubernetes) externalZone(name string) bool {
-	return "" != plugin.Zones(k.externalZones).Matches(name)
 }

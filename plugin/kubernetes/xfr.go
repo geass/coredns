@@ -99,7 +99,7 @@ func (k *Kubernetes) transfer(c chan dns.RR, zone string) {
 
 	defer close(c)
 
-	externalZone := k.externalZone(zone)
+	externalZone := "" != plugin.Zones(k.externalZones).Matches(zone)
 	zonePath := msg.Path(zone, "coredns")
 	serviceList := k.APIConn.ServiceList()
 

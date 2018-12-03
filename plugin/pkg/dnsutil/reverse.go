@@ -33,18 +33,13 @@ func ExtractAddressFromReverse(reverseName string) string {
 // name is in a reverse zone. The returned integer will be 1 for in-addr.arpa. (IPv4)
 // and 2 for ip6.arpa. (IPv6).
 func IsReverse(name string) int {
-	if strings.HasSuffix(name, IP4arpa) {
+	if strings.HasSuffix(name, IP4arpa) || name == IP4arpaDom {
 		return 1
 	}
-	if strings.HasSuffix(name, IP6arpa) {
+	if strings.HasSuffix(name, IP6arpa) || name == IP6arpaDom {
 		return 2
 	}
-	if "."+name == IP4arpa {
-		return 1
-	}
-	if "."+name == IP6arpa {
-		return 2
-	}
+
 	return 0
 }
 
@@ -84,4 +79,8 @@ const (
 	IP4arpa = ".in-addr.arpa."
 	// IP6arpa is the reverse tree suffix for v6 IP addresses.
 	IP6arpa = ".ip6.arpa."
+	// IP4arpa is the reverse tree suffix for v4 IP addresses.
+	IP4arpaDom = "in-addr.arpa."
+	// IP6arpa is the reverse tree suffix for v6 IP addresses.
+	IP6arpaDom = "ip6.arpa."
 )

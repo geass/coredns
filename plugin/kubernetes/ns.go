@@ -4,6 +4,7 @@ import (
 	"net"
 	"strings"
 
+	"github.com/coredns/coredns/plugin/kubernetes/object"
 	"github.com/miekg/dns"
 	api "k8s.io/api/core/v1"
 )
@@ -12,7 +13,7 @@ func isDefaultNS(name, zone string) bool {
 	return strings.Index(name, defaultNSName) == 0 && strings.Index(name, zone) == len(defaultNSName)
 }
 
-func (k *Kubernetes) nsAddr() *dns.A {
+func (k *Kubernetes) nsAddr(external bool) []*dns.A {
 	var (
 		svcName      string
 		svcNamespace string
@@ -38,24 +39,44 @@ FindEndpoint:
 	if len(svcName) == 0 {
 		rr.Hdr.Name = defaultNSName
 		rr.A = localIP
-		return rr
+		return []*dns.A{rr}
 	}
 
-FindService:
-	for _, svc := range k.APIConn.ServiceList() {
-		if svcName == svc.Name && svcNamespace == svc.Namespace {
+	if !external {
+		for _, svc := range k.APIConn.SvcIndex(object.ServiceKey(svcName, svcNamespace)) {
 			if svc.ClusterIP == api.ClusterIPNone {
+				// this should never happen because coredns should always have a static cluster ip
 				rr.A = localIP
 			} else {
 				rr.A = net.ParseIP(svc.ClusterIP)
 			}
-			break FindService
+			break
 		}
+		rr.Hdr.Name = strings.Join([]string{svcName, svcNamespace, "svc."}, ".")
+
+		return []*dns.A{rr}
 	}
 
-	rr.Hdr.Name = strings.Join([]string{svcName, svcNamespace, "svc."}, ".")
+	var nsARecs []*dns.A
+	for _, svc := range k.APIConn.SvcIndex(object.ServiceKey(svcName, svcNamespace)) {
+		for _, ip := range svc.ExternalIPs {
+			rr := new(dns.A)
+			rr.A = net.ParseIP(ip)
+			rr.Hdr.Name = svcName + "." + svcNamespace + "."
+			nsARecs = append(nsARecs, rr)
+		}
+		break
+	}
 
-	return rr
+	if len(nsARecs) == 0 {
+		rr := new(dns.A)
+		rr.A = net.ParseIP("0.0.0.0")
+		rr.Hdr.Name = svcName + "." + svcNamespace + "."
+		return []*dns.A{rr}
+	}
+
+	return nsARecs
+
 }
 
 const defaultNSName = "ns.dns."
