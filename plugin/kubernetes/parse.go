@@ -59,6 +59,8 @@ func parseRequest(state request.Request, external bool) (r recordRequest, err er
 		return r, nil
 	}
 
+	// The local cluster naming scheme requires an object type (svc|pod).
+	// The external naming scheme does not contain this segment.
 	if !external {
 		r.podOrSvc = segs[last]
 		if r.podOrSvc != Pod && r.podOrSvc != Svc {
@@ -82,12 +84,15 @@ func parseRequest(state request.Request, external bool) (r recordRequest, err er
 		return r, nil
 	}
 
+	// The external naming scheme does not contain an endpoint name segment,
+	// so grab SRV port/protocol
 	if external {
 		r.protocol = stripUnderscore(segs[last])
 		r.port = stripUnderscore(segs[last-1])
 		return r, nil
 	}
 
+	// The local cluster naming scheme may contain an endpoint name segment.
 	// Because of ambiguity we check the labels left: 1: an endpoint. 2: port and protocol.
 	// Anything else is a query that is too long to answer and can safely be delegated to return an nxdomain.
 	switch last {
