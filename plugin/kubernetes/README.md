@@ -110,8 +110,8 @@ kubernetes [ZONES...] {
 * `ignore empty_service` return NXDOMAIN for services without any ready endpoint addresses (e.g., ready pods).
   This allows the querying pod to continue searching for the service in the search path.
   The search path could, for example, include another Kubernetes cluster.
-* `external` will synthesize records in the listed **[ZONES...]** for all Kubernetes services with Load Balancer IPs.
-  All **[ZONES...]** must exist in the plugin's zones or server block.  If all non-reverse zones in the
+* `external` **ZONES...** will synthesize records in the listed **ZONES...** for all Kubernetes services with Load Balancer IPs.
+  All **ZONES...** listed here must also exist in the plugin's zones or server block.  If all non-reverse zones in the
   plugin's zones or server block are listed, then no internal service records will be synthesized. Records are in the
   form of `service-name.namespace.zone.`
 
