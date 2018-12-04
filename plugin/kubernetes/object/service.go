@@ -36,7 +36,7 @@ func ToService(obj interface{}) interface{} {
 		Namespace:    svc.GetNamespace(),
 		Index:        ServiceKey(svc.GetName(), svc.GetNamespace()),
 		ClusterIP:    svc.Spec.ClusterIP,
-		ExternalIPs:  make([]string, len(svc.Status.LoadBalancer.Ingress)),
+		ExternalIPs:  make([]string, len(svc.Status.LoadBalancer.Ingress)+len(svc.Spec.ExternalIPs)),
 		Type:         svc.Spec.Type,
 		ExternalName: svc.Spec.ExternalName,
 	}
@@ -51,6 +51,12 @@ func ToService(obj interface{}) interface{} {
 
 	for i, lb := range svc.Status.LoadBalancer.Ingress {
 		s.ExternalIPs[i] = lb.IP
+	}
+
+	ipCount := len(svc.Status.LoadBalancer.Ingress)
+
+	for i, ip := range svc.Spec.ExternalIPs {
+		s.ExternalIPs[i+ipCount] = ip
 	}
 
 	*svc = api.Service{}
