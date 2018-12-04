@@ -69,3 +69,23 @@ func TestIsReverse(t *testing.T) {
 
 	}
 }
+
+func TestIsReverseDomain(t *testing.T) {
+	tests := []struct {
+		name     string
+		expected int
+	}{
+		{"ip6.arpa.", 2},
+		{"in-addr.arpa.", 1},
+		{"example.com.", 0},
+		{"", 0},
+		{"in-addr.arpa.example.com.", 0},
+	}
+	for i, tc := range tests {
+		got := IsReverseDomain(tc.name)
+		if got != tc.expected {
+			t.Errorf("Test %d, got %d, expected %d for %s", i, got, tc.expected, tc.name)
+		}
+
+	}
+}

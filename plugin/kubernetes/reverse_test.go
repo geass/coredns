@@ -34,10 +34,11 @@ func (APIConnReverseTest) SvcIndex(svc string) []*object.Service {
 	}
 	svcs := []*object.Service{
 		{
-			Name:      "svc1",
-			Namespace: "testns",
-			ClusterIP: "192.168.1.100",
-			Ports:     []api.ServicePort{{Name: "http", Protocol: "tcp", Port: 80}},
+			Name:        "svc1",
+			Namespace:   "testns",
+			ClusterIP:   "192.168.1.100",
+			ExternalIPs: []string{"1.2.3.4"},
+			Ports:       []api.ServicePort{{Name: "http", Protocol: "tcp", Port: 80}},
 		},
 	}
 	return svcs
@@ -45,15 +46,16 @@ func (APIConnReverseTest) SvcIndex(svc string) []*object.Service {
 }
 
 func (APIConnReverseTest) SvcIndexReverse(ip string) []*object.Service {
-	if ip != "192.168.1.100" {
+	if ip != "192.168.1.100" && ip != "1.2.3.4" {
 		return nil
 	}
 	svcs := []*object.Service{
 		{
-			Name:      "svc1",
-			Namespace: "testns",
-			ClusterIP: "192.168.1.100",
-			Ports:     []api.ServicePort{{Name: "http", Protocol: "tcp", Port: 80}},
+			Name:        "svc1",
+			Namespace:   "testns",
+			ClusterIP:   "192.168.1.100",
+			ExternalIPs: []string{"1.2.3.4"},
+			Ports:       []api.ServicePort{{Name: "http", Protocol: "tcp", Port: 80}},
 		},
 	}
 	return svcs
@@ -108,7 +110,8 @@ func (APIConnReverseTest) GetNamespaceByName(name string) (*api.Namespace, error
 
 func TestReverse(t *testing.T) {
 
-	k := New([]string{"cluster.local.", "0.10.in-addr.arpa.", "168.192.in-addr.arpa.", "0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.d.c.b.a.4.3.2.1.ip6.arpa.", "0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.3.0.0.7.7.0.0.0.0.d.f.ip6.arpa."})
+	k := New([]string{"cluster.local.", "example.zone.", "0.10.in-addr.arpa.", "2.1.in-addr.arpa.", "168.192.in-addr.arpa.", "0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.d.c.b.a.4.3.2.1.ip6.arpa.", "0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.3.0.0.7.7.0.0.0.0.d.f.ip6.arpa."})
+	k.externalZones = []string{"example.zone."}
 	k.APIConn = &APIConnReverseTest{}
 
 	tests := []test.Case{
@@ -124,6 +127,13 @@ func TestReverse(t *testing.T) {
 			Rcode: dns.RcodeSuccess,
 			Answer: []dns.RR{
 				test.PTR("100.1.168.192.in-addr.arpa.     5     IN      PTR       svc1.testns.svc.cluster.local."),
+			},
+		},
+		{ // External IP of svc1 should have a record
+			Qname: "4.3.2.1.in-addr.arpa.", Qtype: dns.TypePTR,
+			Rcode: dns.RcodeSuccess,
+			Answer: []dns.RR{
+				test.PTR("4.3.2.1.in-addr.arpa.      5    IN      PTR       svc1.testns.example.zone."),
 			},
 		},
 		{ // A PTR record query for an existing ipv6 endpoint should return a record

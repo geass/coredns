@@ -87,6 +87,9 @@ func parseRequest(state request.Request, external bool) (r recordRequest, err er
 	// The external naming scheme does not contain an endpoint name segment,
 	// so grab SRV port/protocol
 	if external {
+		if last != 1 {
+			return r, errInvalidRequest
+		}
 		r.protocol = stripUnderscore(segs[last])
 		r.port = stripUnderscore(segs[last-1])
 		return r, nil
@@ -96,7 +99,6 @@ func parseRequest(state request.Request, external bool) (r recordRequest, err er
 	// Because of ambiguity we check the labels left: 1: an endpoint. 2: port and protocol.
 	// Anything else is a query that is too long to answer and can safely be delegated to return an nxdomain.
 	switch last {
-
 	case 0: // endpoint only
 		r.endpoint = segs[last]
 	case 1: // service and port

@@ -59,4 +59,54 @@ func TestParseInvalidRequest(t *testing.T) {
 	}
 }
 
+func TestParseRequestExternal(t *testing.T) {
+	tests := []struct {
+		query    string
+		expected string // output from r.String()
+	}{
+		// valid SRV request
+		{"_http._tcp.webs.mynamespace.inter.webs.tests.", "http.tcp..webs.mynamespace."},
+		// wildcard acceptance
+		{"*.any.*.any.inter.webs.tests.", "*.any..*.any."},
+		// bare zone
+		{"inter.webs.tests.", "....."},
+		// bare svc type
+		{"svc.inter.webs.tests.", "....."},
+		// bare pod type
+		{"pod.inter.webs.tests.", "....."},
+	}
+	for i, tc := range tests {
+		m := new(dns.Msg)
+		m.SetQuestion(tc.query, dns.TypeA)
+		state := request.Request{Zone: zone, Req: m}
+
+		r, e := parseRequest(state, true)
+		if e != nil {
+			t.Errorf("Test %d, expected no error, got '%v'.", i, e)
+		}
+		rs := r.String()
+		if rs != tc.expected {
+			t.Errorf("Test %d, expected (stringyfied) recordRequest: %s, got %s", i, tc.expected, rs)
+		}
+	}
+}
+
+func TestParseInvalidRequestExternal(t *testing.T) {
+	invalid := []string{
+		// A request of endpoint
+		"1-2-3-4.webs.mynamespace.inter.webs.tests.",
+		}
+
+	for i, query := range invalid {
+		m := new(dns.Msg)
+		m.SetQuestion(query, dns.TypeA)
+		state := request.Request{Zone: zone, Req: m}
+
+		if _, e := parseRequest(state, false); e == nil {
+			t.Errorf("Test %d: expected error from %s, got none", i, query)
+		}
+	}
+}
+
+
 const zone = "inter.webs.tests."

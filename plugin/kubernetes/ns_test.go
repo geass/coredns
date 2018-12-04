@@ -30,6 +30,7 @@ func (APIConnTest) SvcIndex(string) []*object.Service {
 			Name:      "dns-service",
 			Namespace: "kube-system",
 			ClusterIP: "10.0.0.111",
+			ExternalIPs: []string{"1.2.3.4"},
 		},
 	}
 	return svcs
@@ -71,6 +72,23 @@ func TestNsAddr(t *testing.T) {
 		t.Errorf("Expected A to be %q, got %q", expected, cdr[0].A.String())
 	}
 	expected = "dns-service.kube-system.svc."
+	if cdr[0].Hdr.Name != expected {
+		t.Errorf("Expected Hdr.Name to be %q, got %q", expected, cdr[0].Hdr.Name)
+	}
+}
+
+func TestNsAddrExternal(t *testing.T) {
+
+	k := New([]string{"inter.webs.test."})
+	k.APIConn = &APIConnTest{}
+
+	cdr := k.nsAddr(true)
+	expected := "1.2.3.4"
+
+	if cdr[0].A.String() != expected {
+		t.Errorf("Expected A to be %q, got %q", expected, cdr[0].A.String())
+	}
+	expected = "dns-service.kube-system."
 	if cdr[0].Hdr.Name != expected {
 		t.Errorf("Expected Hdr.Name to be %q, got %q", expected, cdr[0].Hdr.Name)
 	}

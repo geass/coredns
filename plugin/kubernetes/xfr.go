@@ -120,7 +120,7 @@ func (k *Kubernetes) transfer(c chan dns.RR, zone string) {
 			if !externalZone {
 				clusterIP := net.ParseIP(svc.ClusterIP)
 				if clusterIP != nil {
-					ips = append(ips, svc.ClusterIP)
+					ips = []string{svc.ClusterIP}
 				}
 			} else {
 				ips = svc.ExternalIPs

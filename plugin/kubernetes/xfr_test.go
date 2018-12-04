@@ -13,8 +13,25 @@ import (
 )
 
 func TestKubernetesXFR(t *testing.T) {
-	k := New([]string{"cluster.local."})
-	k.APIConn = &APIConnServeTest{}
+	testk8sXFR(t,
+		[]string{"cluster.local."},
+		[]string{},
+		&APIConnServeTest{},
+		dnsTestCases)
+}
+
+func TestKubernetesXFRExternal(t *testing.T) {
+	testk8sXFR(t,
+		[]string{"example.com.", "cluster.local."},
+		[]string{"example.com."},
+		&APIConnServeTestExternal{},
+		dnsTestCasesExternal)
+}
+
+func testk8sXFR(t *testing.T, zones, externalZones []string, apiConn dnsController, testCases []test.Case) {
+	k := New(zones)
+	k.externalZones = externalZones
+	k.APIConn = apiConn
 	k.TransferTo = []string{"10.240.0.1:53"}
 	k.Namespaces = map[string]bool{"testns": true}
 
@@ -50,7 +67,7 @@ func TestKubernetesXFR(t *testing.T) {
 	}
 
 	testRRs := []dns.RR{}
-	for _, tc := range dnsTestCases {
+	for _, tc := range testCases {
 		if tc.Rcode != dns.RcodeSuccess {
 			continue
 		}
