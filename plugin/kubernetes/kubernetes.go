@@ -127,7 +127,8 @@ func (k *Kubernetes) Services(state request.Request, exact bool, opt plugin.Opti
 		nss := k.nsAddr(external)
 		var svcs []msg.Service
 		for _, ns := range nss {
-			if ns.A.String() == "0.0.0.0" {
+			if ns.A == nil {
+				// the IP is not known, don't create an A record
 				continue
 			}
 			svcs = append(svcs, msg.Service{Host: ns.A.String(), Key: msg.Path(state.QName(), "coredns")})

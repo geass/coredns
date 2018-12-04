@@ -58,11 +58,13 @@ FindEndpoint:
 	}
 
 	var nsARecs []*dns.A
+	name := strings.Join([]string{svcName, "." , svcNamespace , "."}, "")
+
 	for _, svc := range k.APIConn.SvcIndex(object.ServiceKey(svcName, svcNamespace)) {
 		for _, ip := range svc.ExternalIPs {
 			rr := new(dns.A)
 			rr.A = net.ParseIP(ip)
-			rr.Hdr.Name = svcName + "." + svcNamespace + "."
+			rr.Hdr.Name = name
 			nsARecs = append(nsARecs, rr)
 		}
 		break
@@ -70,13 +72,11 @@ FindEndpoint:
 
 	if len(nsARecs) == 0 {
 		rr := new(dns.A)
-		rr.A = net.ParseIP("0.0.0.0")
-		rr.Hdr.Name = svcName + "." + svcNamespace + "."
+		rr.A = nil
+		rr.Hdr.Name = name
 		return []*dns.A{rr}
 	}
-
 	return nsARecs
-
 }
 
 const defaultNSName = "ns.dns."

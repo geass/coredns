@@ -294,7 +294,7 @@ func ParseStanza(c *caddy.Controller) (*Kubernetes, error) {
 	// determine if all zones are external
 	fwdZoneCount := 0
 	for _, z := range k8s.Zones {
-		if dnsutil.IsReverse(z) > 0 {
+		if dnsutil.IsReverse(z) > 0 || dnsutil.IsReverseDomain(z) > 0{
 			continue
 		}
 		fwdZoneCount++
@@ -311,7 +311,7 @@ func ParseStanza(c *caddy.Controller) (*Kubernetes, error) {
 	// determine primary zone index
 	k8s.primaryZoneIndex = -1
 	for i, z := range k8s.Zones {
-		if dnsutil.IsReverse(z) > 0 {
+		if dnsutil.IsReverse(z) > 0 || dnsutil.IsReverseDomain(z) > 0{
 			continue
 		}
 		if "" != plugin.Zones(k8s.externalZones).Matches(z) {
