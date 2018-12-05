@@ -564,7 +564,7 @@ func (k *Kubernetes) findServices(r recordRequest, zone string) (services []msg.
 	return services, err
 }
 
-// findServices returns the services matching r from the cache.
+// findServicesExternal returns the services with external IPs matching r from the cache.
 func (k *Kubernetes) findServicesExternal(r recordRequest, zone string) (services []msg.Service, err error) {
 	zonePath := msg.Path(zone, "coredns")
 
@@ -593,12 +593,12 @@ func (k *Kubernetes) findServicesExternal(r recordRequest, zone string) (service
 			continue
 		}
 
-		for _, p := range svc.Ports {
+		for _, ip := range svc.ExternalIPs {
+			for _, p := range svc.Ports {
 			if !(match(r.port, p.Name) && match(r.protocol, string(p.Protocol))) {
 				continue
 			}
 			err = nil
-			for _, ip := range svc.ExternalIPs {
 				s := msg.Service{Host: ip, Port: int(p.Port), TTL: k.ttl}
 				s.Key = strings.Join([]string{zonePath, svc.Namespace, svc.Name}, "/")
 				services = append(services, s)
