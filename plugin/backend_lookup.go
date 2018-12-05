@@ -374,6 +374,7 @@ func NS(b ServiceBackend, zone string, state request.Request, opt Options) (reco
 	// ... and reset
 	state.Req.Question[0].Name = old
 
+	hostSeen := make(map[string]bool)
 	for _, serv := range services {
 		what, ip := serv.HostType()
 		switch what {
@@ -382,7 +383,10 @@ func NS(b ServiceBackend, zone string, state request.Request, opt Options) (reco
 
 		case dns.TypeA, dns.TypeAAAA:
 			serv.Host = msg.Domain(serv.Key)
-			records = append(records, serv.NewNS(state.QName()))
+			if !hostSeen[serv.Host] {
+				records = append(records, serv.NewNS(state.QName()))
+				hostSeen[serv.Host] = true
+			}
 			extra = append(extra, newAddress(serv, serv.Host, ip, what))
 		}
 	}

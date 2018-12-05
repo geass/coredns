@@ -117,9 +117,12 @@ func (k *Kubernetes) Services(state request.Request, exact bool, opt plugin.Opti
 
 	case dns.TypeNS:
 		// We can only get here if the qname equals the zone, see ServeDNS in handler.go.
-		ns := k.nsAddr(external)
-		svc := msg.Service{Host: ns[0].A.String(), Key: msg.Path(state.QName(), "coredns")}
-		return []msg.Service{svc}, nil
+		var svcs []msg.Service
+		nss := k.nsAddr(external)
+		for _, ns := range nss {
+			svcs = append(svcs, msg.Service{Host: ns.A.String(), Key: msg.Path(state.QName(), "coredns"), TTL: k.ttl})
+		}
+		return svcs, nil
 	}
 
 	if state.QType() == dns.TypeA && isDefaultNS(state.Name(), state.Zone) {
@@ -131,7 +134,7 @@ func (k *Kubernetes) Services(state request.Request, exact bool, opt plugin.Opti
 				// the IP is not known, don't create an A record
 				continue
 			}
-			svcs = append(svcs, msg.Service{Host: ns.A.String(), Key: msg.Path(state.QName(), "coredns")})
+			svcs = append(svcs, msg.Service{Host: ns.A.String(), Key: msg.Path(state.QName(), "coredns"), TTL: k.ttl})
 		}
 		return svcs, nil
 	}
@@ -595,10 +598,10 @@ func (k *Kubernetes) findServicesExternal(r recordRequest, zone string) (service
 
 		for _, ip := range svc.ExternalIPs {
 			for _, p := range svc.Ports {
-			if !(match(r.port, p.Name) && match(r.protocol, string(p.Protocol))) {
-				continue
-			}
-			err = nil
+				if !(match(r.port, p.Name) && match(r.protocol, string(p.Protocol))) {
+					continue
+				}
+				err = nil
 				s := msg.Service{Host: ip, Port: int(p.Port), TTL: k.ttl}
 				s.Key = strings.Join([]string{zonePath, svc.Namespace, svc.Name}, "/")
 				services = append(services, s)
