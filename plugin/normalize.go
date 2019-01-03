@@ -15,9 +15,9 @@ import (
 // Zones respresents a lists of zone names.
 type Zones []string
 
-// Matches checks is qname is a subdomain of any of the zones in z.  The match
-// will return the most specific zones that matches other. The empty string
-// signals a not found condition.
+// Matches checks if qname is a subdomain of any of the zones in z.  The match
+// will return the most specific zones that matches. The empty string
+// signals a not found condition. The case of the original qname is preserved.
 func (z Zones) Matches(qname string) string {
 	zone := ""
 	for _, zname := range z {
@@ -28,7 +28,7 @@ func (z Zones) Matches(qname string) string {
 			}
 		}
 	}
-	return zone
+	return qname[len(qname)-len(zone):]
 }
 
 // Normalize fully qualifies all zones in z. The zones in Z must be domain names, without
