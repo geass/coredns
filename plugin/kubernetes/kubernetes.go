@@ -30,7 +30,7 @@ type Kubernetes struct {
 	Next             plugin.Handler
 	Zones            []string
 	Upstream         upstream.Upstream
-	APIServer    string
+	APIServer        string
 	APIProxy         *apiProxy
 	APICertAuth      string
 	APIClientCert    string
