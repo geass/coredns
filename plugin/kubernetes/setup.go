@@ -194,8 +194,8 @@ func ParseStanza(c *caddy.Controller) (*Kubernetes, error) {
 			return nil, c.ArgErr()
 		case "endpoint":
 			args := c.RemainingArgs()
-			if len(args) > 0 {
-				k8s.APIServerList = args
+			if len(args) == 1 {
+				k8s.APIServer = args[0]
 				continue
 			}
 			return nil, c.ArgErr()

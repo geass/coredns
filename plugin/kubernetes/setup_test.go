@@ -65,20 +65,6 @@ func TestKubernetesParse(t *testing.T) {
 		},
 		{
 			`kubernetes coredns.local {
-	endpoint http://localhost:9090 http://localhost:9091
-}`,
-			false,
-			"",
-			1,
-			0,
-			defaultResyncPeriod,
-			"",
-			podModeDisabled,
-			fall.Zero,
-			nil,
-		},
-		{
-			`kubernetes coredns.local {
 	namespaces demo
 }`,
 			false,
