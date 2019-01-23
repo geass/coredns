@@ -227,6 +227,14 @@ var dnsTestCases = []test.Case{
 			test.A("svc1.testns.svc.cluster.local.	5	IN	A	10.0.0.1"),
 		},
 	},
+	// CNAME External To Internal Non-Existent Service
+	{
+		Qname: "external-to-not-a-service.testns.svc.cluster.local", Qtype: dns.TypeA,
+		Rcode: dns.RcodeSuccess,
+		Answer: []dns.RR{
+			test.CNAME("external-to-not-a-service.testns.svc.cluster.local.	5	IN	CNAME	not-here.testns.svc.cluster.local."),
+		},
+	},
 	// AAAA Service (with an existing A record, but no AAAA record)
 	{
 		Qname: "svc1.testns.svc.cluster.local.", Qtype: dns.TypeAAAA,
@@ -510,6 +518,17 @@ var svcIndex = map[string][]*object.Service{
 			Name:         "external-to-service",
 			Namespace:    "testns",
 			ExternalName: "svc1.testns.svc.cluster.local.",
+			Type:         api.ServiceTypeExternalName,
+			Ports: []api.ServicePort{
+				{Name: "http", Protocol: "tcp", Port: 80},
+			},
+		},
+	},
+	"external-to-not-a-service.testns": {
+		{
+			Name:         "external-to-not-a-service",
+			Namespace:    "testns",
+			ExternalName: "not-here.testns.svc.cluster.local.",
 			Type:         api.ServiceTypeExternalName,
 			Ports: []api.ServicePort{
 				{Name: "http", Protocol: "tcp", Port: 80},
