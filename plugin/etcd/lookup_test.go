@@ -125,7 +125,9 @@ var dnsTestCases = []test.Case{
 	// CNAME (unresolvable internal name)
 	{
 		Qname: "cname.prod.region1.skydns.test.", Qtype: dns.TypeA,
-		Ns: []dns.RR{test.SOA("skydns.test. 30 SOA ns.dns.skydns.test. hostmaster.skydns.test. 0 0 0 0 0")},
+		Answer: []dns.RR{
+			test.CNAME("cname.prod.region1.skydns.test. 300 CNAME unresolvable.skydns.test."),
+		},
 	},
 	// Wildcard Test
 	{
@@ -181,7 +183,10 @@ var dnsTestCases = []test.Case{
 	// CNAME loop detection
 	{
 		Qname: "a.cname.skydns.test.", Qtype: dns.TypeA,
-		Ns: []dns.RR{test.SOA("skydns.test. 30 SOA ns.dns.skydns.test. hostmaster.skydns.test. 1407441600 28800 7200 604800 60")},
+		Answer: []dns.RR{
+			test.CNAME("a.cname.skydns.test. 300 CNAME b.cname.skydns.test."),
+			test.CNAME("b.cname.skydns.test. 300 CNAME a.cname.skydns.test."),
+		},
 	},
 	// NODATA Test
 	{
