@@ -47,7 +47,6 @@ func A(b ServiceBackend, zone string, state request.Request, previousRecords []d
 				state1.Zone = zone
 				nextRecords, err := A(b, zone, state1, append(previousRecords, newRecord), opt)
 				if err == nil {
-					// Not only have we found something we should add the CNAME and the IP addresses.
 					if len(nextRecords) > 0 {
 						records = append(records, nextRecords...)
 					}
@@ -109,14 +108,13 @@ func AAAA(b ServiceBackend, zone string, state request.Request, previousRecords 
 				continue
 			}
 			if dns.IsSubDomain(zone, dns.Fqdn(serv.Host)) {
+				records = append(records, newRecord)
+
 				state1 := state.NewWithQuestion(serv.Host, state.QType())
 				state1.Zone = zone
 				nextRecords, err := AAAA(b, zone, state1, append(previousRecords, newRecord), opt)
-
 				if err == nil {
-					// Not only have we found something we should add the CNAME and the IP addresses.
 					if len(nextRecords) > 0 {
-						records = append(records, newRecord)
 						records = append(records, nextRecords...)
 					}
 				}
