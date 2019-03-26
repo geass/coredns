@@ -91,6 +91,7 @@ type dnsControlOpts struct {
 
 	zones            []string
 	endpointNameMode bool
+	transfer         bool
 }
 
 // newDNSController creates a controller for CoreDNS.
@@ -104,6 +105,12 @@ func newdnsController(kubeClient kubernetes.Interface, opts dnsControlOpts) *dns
 		endpointNameMode: opts.endpointNameMode,
 	}
 
+	var eventHandlers cache.ResourceEventHandlerFuncs
+	if opts.transfer {
+		eventHandlers = cache.ResourceEventHandlerFuncs{AddFunc: dns.Add, UpdateFunc: dns.Update, DeleteFunc: dns.Delete}
+	} else {
+		eventHandlers = cache.ResourceEventHandlerFuncs{}
+	}
 	dns.svcLister, dns.svcController = object.NewIndexerInformer(
 		&cache.ListWatch{
 			ListFunc:  serviceListFunc(dns.client, api.NamespaceAll, dns.selector),
@@ -111,7 +118,7 @@ func newdnsController(kubeClient kubernetes.Interface, opts dnsControlOpts) *dns
 		},
 		&api.Service{},
 		opts.resyncPeriod,
-		cache.ResourceEventHandlerFuncs{AddFunc: dns.Add, UpdateFunc: dns.Update, DeleteFunc: dns.Delete},
+		eventHandlers,
 		cache.Indexers{svcNameNamespaceIndex: svcNameNamespaceIndexFunc, svcIPIndex: svcIPIndexFunc},
 		object.ToService,
 	)
@@ -124,7 +131,7 @@ func newdnsController(kubeClient kubernetes.Interface, opts dnsControlOpts) *dns
 			},
 			&api.Pod{},
 			opts.resyncPeriod,
-			cache.ResourceEventHandlerFuncs{AddFunc: dns.Add, UpdateFunc: dns.Update, DeleteFunc: dns.Delete},
+			eventHandlers,
 			cache.Indexers{podIPIndex: podIPIndexFunc},
 			object.ToPod,
 		)
@@ -138,7 +145,7 @@ func newdnsController(kubeClient kubernetes.Interface, opts dnsControlOpts) *dns
 			},
 			&api.Endpoints{},
 			opts.resyncPeriod,
-			cache.ResourceEventHandlerFuncs{AddFunc: dns.Add, UpdateFunc: dns.Update, DeleteFunc: dns.Delete},
+			eventHandlers,
 			cache.Indexers{epNameNamespaceIndex: epNameNamespaceIndexFunc, epIPIndex: epIPIndexFunc},
 			object.ToEndpoints)
 	}

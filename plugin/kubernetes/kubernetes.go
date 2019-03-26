@@ -231,6 +231,7 @@ func (k *Kubernetes) InitKubeCache() (err error) {
 
 	k.opts.zones = k.Zones
 	k.opts.endpointNameMode = k.endpointNameMode
+	k.opts.transfer = len(k.TransferTo) > 0
 	k.APIConn = newdnsController(kubeClient, k.opts)
 
 	return err
