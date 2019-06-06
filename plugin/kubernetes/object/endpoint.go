@@ -27,10 +27,11 @@ type EndpointSubset struct {
 
 // EndpointAddress is a tuple that describes single IP address.
 type EndpointAddress struct {
-	IP            string
-	Hostname      string
-	NodeName      string
-	TargetRefName string
+	IP                 string
+	Hostname           string
+	NodeName           string
+	TargetRefName      string
+	TargetRefNamespace string
 }
 
 // EndpointPort is a tuple that describes a single port.
@@ -75,6 +76,7 @@ func ToEndpoints(obj interface{}) interface{} {
 			}
 			if a.TargetRef != nil {
 				ea.TargetRefName = a.TargetRef.Name
+				ea.TargetRefNamespace = a.TargetRef.Namespace
 			}
 			sub.Addresses[j] = ea
 		}

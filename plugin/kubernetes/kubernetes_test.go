@@ -130,7 +130,7 @@ func (APIConnServiceTest) EpIndex(string) []*object.Endpoints {
 			Subsets: []object.EndpointSubset{
 				{
 					Addresses: []object.EndpointAddress{
-						{IP: "172.0.0.1", Hostname: "ep1a"},
+						{IP: "172.0.0.1", Hostname: "ep1a", TargetRefNamespace: "testns"},
 					},
 					Ports: []object.EndpointPort{
 						{Port: 80, Protocol: "tcp", Name: "http"},
@@ -144,7 +144,7 @@ func (APIConnServiceTest) EpIndex(string) []*object.Endpoints {
 			Subsets: []object.EndpointSubset{
 				{
 					Addresses: []object.EndpointAddress{
-						{IP: "172.0.0.2"},
+						{IP: "172.0.0.2", TargetRefNamespace: "testns2"},
 					},
 					Ports: []object.EndpointPort{
 						{Port: 80, Protocol: "tcp", Name: "http"},
@@ -187,7 +187,7 @@ func (APIConnServiceTest) EndpointsList() []*object.Endpoints {
 			Subsets: []object.EndpointSubset{
 				{
 					Addresses: []object.EndpointAddress{
-						{IP: "172.0.0.1", Hostname: "ep1a"},
+						{IP: "172.0.0.1", Hostname: "ep1a", TargetRefNamespace: "testns"},
 					},
 					Ports: []object.EndpointPort{
 						{Port: 80, Protocol: "tcp", Name: "http"},
@@ -201,7 +201,7 @@ func (APIConnServiceTest) EndpointsList() []*object.Endpoints {
 			Subsets: []object.EndpointSubset{
 				{
 					Addresses: []object.EndpointAddress{
-						{IP: "172.0.0.2"},
+						{IP: "172.0.0.2", TargetRefNamespace: "testns2"},
 					},
 					Ports: []object.EndpointPort{
 						{Port: 80, Protocol: "tcp", Name: "http"},
@@ -401,11 +401,13 @@ func TestEndpointFQDN(t *testing.T) {
 				{
 					Addresses: []object.EndpointAddress{
 						{
-							IP:       "172.0.0.1",
-							Hostname: "ep1a",
+							IP:                 "172.0.0.1",
+							Hostname:           "ep1a",
+							TargetRefNamespace: "testns",
 						},
 						{
-							IP: "172.0.0.2",
+							IP:                 "172.0.0.2",
+							TargetRefNamespace: "testns2",
 						},
 					},
 				},
@@ -416,7 +418,7 @@ func TestEndpointFQDN(t *testing.T) {
 
 	expected := []string{
 		"ep1a.svc1.testns.svc.cluster.local.",
-		"172-0-0-2.svc1.testns.svc.cluster.local.",
+		"172-0-0-2.svc1.testns2.svc.cluster.local.",
 	}
 
 	for i := range fqdns {
