@@ -292,7 +292,13 @@ func endpointFQDN(ep *object.Endpoints, zone string, endpointNameMode bool) []st
 	var names []string
 	for _, ss := range ep.Subsets {
 		for _, addr := range ss.Addresses {
-			names = append(names, dnsutil.Join(endpointHostname(addr, endpointNameMode), ep.GetName(), addr.TargetRefNamespace, Svc, zone))
+			var namespace string
+			if addr.TargetRefNamespace != "" {
+				namespace = addr.TargetRefNamespace
+			} else {
+				namespace = ep.Namespace
+			}
+			names = append(names, dnsutil.Join(endpointHostname(addr, endpointNameMode), ep.GetName(), namespace, Svc, zone))
 		}
 	}
 	return names
