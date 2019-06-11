@@ -53,8 +53,12 @@ cache [TTL] [ZONES...] {
 
 ## Capacity and Eviction
 
-If **CAPACITY** _is not_ specified, the default cache size is 9984 per cache. The minimum allowed cache size is 1024.
-If **CAPACITY** _is_ specified, the actual cache size used will be rounded down to the nearest number divisible by 256 (so all shards are equal in size).
+If **CAPACITY** is zero, the corresponding cache will be disabled.
+
+If **CAPACITY** _is not_ specified, the default cache size is 9984 per cache.
+
+If **CAPACITY** _is_ specified, the actual cache size used will be rounded down to the nearest 
+number divisible by 256 (so all shards are equal in size). The minimum allowed cache size is 1024.
 
 Eviction is done per shard. In effect, when a shard reaches capacity, items are evicted from that shard.
 Since shards don't fill up perfectly evenly, evictions will occur before the entire cache reaches full capacity.
@@ -100,6 +104,16 @@ Enable caching for all zones, keep a positive cache size of 5000 and a negative 
      cache {
          success 5000
          denial 2500
+    }
+ }
+ ~~~
+
+Enable caching for all zones but disable negative caching:
+
+~~~ corefile
+ . {
+     cache {
+         denial 0
     }
  }
  ~~~

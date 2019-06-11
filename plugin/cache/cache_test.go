@@ -198,7 +198,7 @@ func TestCache(t *testing.T) {
 		valid, k := key(state.Name(), m, mt, state.Do())
 
 		if valid {
-			crr.set(m, k, mt, c.pttl)
+			crr.set(m, k, cacheType(mt), c.pttl)
 		}
 
 		i, _ := c.get(time.Now().UTC(), state, "dns://:53")
@@ -249,6 +249,38 @@ func TestCacheZeroTTL(t *testing.T) {
 	}
 }
 
+func TestZeroLengthPosCache(t *testing.T) {
+	c := New()
+	c.pcap = 0
+	c.pcache = nil
+	c.Next = zeroLengthCacheBackend(true)
+
+	req := new(dns.Msg)
+	req.SetQuestion("example.org.", dns.TypeA)
+	ctx := context.TODO()
+
+	_, err := c.ServeDNS(ctx, &test.ResponseWriter{}, req)
+	if err != nil {
+		t.Errorf("Unexpected error for zero length positive cache")
+	}
+}
+
+func TestZeroLengthCacheNeg(t *testing.T) {
+	c := New()
+	c.ncap = 0
+	c.ncache = nil
+	c.Next = zeroLengthCacheBackend(false)
+
+	req := new(dns.Msg)
+	req.SetQuestion("example.org.", dns.TypeA)
+	ctx := context.TODO()
+
+	_, err := c.ServeDNS(ctx, &test.ResponseWriter{}, req)
+	if err != nil {
+		t.Errorf("Unexpected error for zero length negative cache")
+	}
+}
+
 func BenchmarkCacheResponse(b *testing.B) {
 	c := New()
 	c.prefetch = 1
@@ -296,6 +328,26 @@ func zeroTTLBackend() plugin.Handler {
 		m.Answer = []dns.RR{test.A("example.org. 0 IN A 127.0.0.53")}
 		w.WriteMsg(m)
 		return dns.RcodeSuccess, nil
+	})
+}
+
+func zeroLengthCacheBackend(pos bool) plugin.Handler {
+	return plugin.HandlerFunc(func(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
+		m := new(dns.Msg)
+		m.SetReply(r)
+		m.Response = true
+		if pos {
+			m.Rcode = dns.RcodeSuccess
+			m.Answer = []dns.RR{test.A("example.org. 600 IN A 0.0.0.0")}
+		} else {
+			m.Rcode = dns.RcodeNameError
+		}
+		w.WriteMsg(m)
+		if pos {
+			return dns.RcodeSuccess, nil
+		} else {
+			return dns.RcodeNameError, nil
+		}
 	})
 }
 

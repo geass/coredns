@@ -156,6 +156,12 @@ func (w *ResponseWriter) WriteMsg(res *dns.Msg) error {
 		do = opt.Do()
 	}
 
+	ct := cacheType(mt)
+	if (ct == posCache && w.pcap == 0) || (ct == negCache && w.ncap == 0) || ct == noCache {
+		// don't cache response if destined for a zero length cache, or should otherwise not cache
+		return w.ResponseWriter.WriteMsg(res)
+	}
+
 	// key returns empty string for anything we don't want to cache.
 	hasKey, key := key(w.state.Name(), res, mt, do)
 
@@ -172,7 +178,7 @@ func (w *ResponseWriter) WriteMsg(res *dns.Msg) error {
 
 	if hasKey && duration > 0 {
 		if w.state.Match(res) {
-			w.set(res, key, mt, duration)
+			w.set(res, key, ct, duration)
 			cacheSize.WithLabelValues(w.server, Success).Set(float64(w.pcache.Len()))
 			cacheSize.WithLabelValues(w.server, Denial).Set(float64(w.ncache.Len()))
 		} else {
@@ -201,22 +207,30 @@ func (w *ResponseWriter) WriteMsg(res *dns.Msg) error {
 	return w.ResponseWriter.WriteMsg(res)
 }
 
-func (w *ResponseWriter) set(m *dns.Msg, key uint64, mt response.Type, duration time.Duration) {
-	// duration is expected > 0
-	// and key is valid
+func cacheType(mt response.Type) int8 {
 	switch mt {
 	case response.NoError, response.Delegation:
-		i := newItem(m, w.now(), duration)
-		w.pcache.Add(key, i)
-
+		return posCache
 	case response.NameError, response.NoData, response.ServerError:
-		i := newItem(m, w.now(), duration)
-		w.ncache.Add(key, i)
-
+		return negCache
 	case response.OtherError:
-		// don't cache these
+		return noCache
 	default:
 		log.Warningf("Caching called with unknown classification: %d", mt)
+	}
+	return noCache
+}
+
+func (w *ResponseWriter) set(m *dns.Msg, key uint64, ct int8, duration time.Duration) {
+	// duration is expected > 0
+	// and key is valid
+	switch ct {
+	case posCache:
+		i := newItem(m, w.now(), duration)
+		w.pcache.Add(key, i)
+	case negCache:
+		i := newItem(m, w.now(), duration)
+		w.ncache.Add(key, i)
 	}
 }
 
@@ -242,4 +256,9 @@ const (
 	Success = "success"
 	// Denial is the class defined for negative caching.
 	Denial = "denial"
+
+	// Cache types for indicating which cache a response belongs
+	noCache  = 0 // should not be cached
+	posCache = 1 // should go in positive cache
+	negCache = 2 // should go in negative cache
 )

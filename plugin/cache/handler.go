@@ -44,7 +44,7 @@ func (c *Cache) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) 
 					plugin.NextOrFailure(c.Name(), c.Next, ctx, w, r)
 
 					// When prefetching we loose the item i, and with it the frequency
-					// that we've gathered sofar. See we copy the frequencies info back
+					// that we've gathered so far. See we copy the frequencies info back
 					// into the new item that was stored in the cache.
 					if i1 := c.exists(state); i1 != nil {
 						i1.Freq.Reset(now, i.Freq.Hits())
@@ -65,14 +65,17 @@ func (c *Cache) Name() string { return "cache" }
 func (c *Cache) get(now time.Time, state request.Request, server string) (*item, bool) {
 	k := hash(state.Name(), state.QType(), state.Do())
 
-	if i, ok := c.ncache.Get(k); ok && i.(*item).ttl(now) > 0 {
-		cacheHits.WithLabelValues(server, Denial).Inc()
-		return i.(*item), true
+	if c.ncap > 0 {
+		if i, ok := c.ncache.Get(k); ok && i.(*item).ttl(now) > 0 {
+			cacheHits.WithLabelValues(server, Denial).Inc()
+			return i.(*item), true
+		}
 	}
-
-	if i, ok := c.pcache.Get(k); ok && i.(*item).ttl(now) > 0 {
-		cacheHits.WithLabelValues(server, Success).Inc()
-		return i.(*item), true
+	if c.pcap > 0 {
+		if i, ok := c.pcache.Get(k); ok && i.(*item).ttl(now) > 0 {
+			cacheHits.WithLabelValues(server, Success).Inc()
+			return i.(*item), true
+		}
 	}
 	cacheMisses.WithLabelValues(server).Inc()
 	return nil, false
@@ -80,11 +83,15 @@ func (c *Cache) get(now time.Time, state request.Request, server string) (*item,
 
 func (c *Cache) exists(state request.Request) *item {
 	k := hash(state.Name(), state.QType(), state.Do())
-	if i, ok := c.ncache.Get(k); ok {
-		return i.(*item)
+	if c.ncap > 0 {
+		if i, ok := c.ncache.Get(k); ok {
+			return i.(*item)
+		}
 	}
-	if i, ok := c.pcache.Get(k); ok {
-		return i.(*item)
+	if c.pcap > 0 {
+		if i, ok := c.pcache.Get(k); ok {
+			return i.(*item)
+		}
 	}
 	return nil
 }

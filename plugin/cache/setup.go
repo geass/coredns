@@ -191,8 +191,12 @@ func cacheParse(c *caddy.Controller) (*Cache, error) {
 		}
 		ca.Zones = origins
 
-		ca.pcache = cache.New(ca.pcap)
-		ca.ncache = cache.New(ca.ncap)
+		if ca.pcap > 0 {
+			ca.pcache = cache.New(ca.pcap)
+		}
+		if ca.ncap > 0 {
+			ca.ncache = cache.New(ca.ncap)
+		}
 	}
 
 	return ca, nil
