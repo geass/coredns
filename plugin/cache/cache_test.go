@@ -345,9 +345,8 @@ func zeroLengthCacheBackend(pos bool) plugin.Handler {
 		w.WriteMsg(m)
 		if pos {
 			return dns.RcodeSuccess, nil
-		} else {
-			return dns.RcodeNameError, nil
 		}
+		return dns.RcodeNameError, nil
 	})
 }
 
